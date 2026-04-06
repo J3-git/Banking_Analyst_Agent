@@ -6,17 +6,19 @@ import subprocess
 import time
 
 
-def wait_for_healthy(container_name, timeout=600):
+def wait_for_healthy(container_name, timeout=1200):
     start = time.time()
 
     while True:
         result = subprocess.run(
             ["docker", "inspect", "-f", "{{.State.Health.Status}}", container_name],
             capture_output=True,
-            text=True
+            text=True,
         )
 
-        status = result.stdout.strip() #contains whatever the command printed to the terminal (the standard output)
+        status = (
+            result.stdout.strip()
+        )  # contains whatever the command printed to the terminal (the standard output)
 
         if status == "healthy":
             print(f"{container_name} is healthy.")
@@ -28,23 +30,32 @@ def wait_for_healthy(container_name, timeout=600):
         print(f"Waiting for {container_name}... ({status})")
         time.sleep(60)
 
+
 SERVERS = [
-    "docker", "compose",
-    "-f", "Servers/docker-compose.server.yml",
-    "--env-file", "Servers/.env.server"
+    "docker",
+    "compose",
+    "-f",
+    "Servers/docker-compose.server.yml",
+    "--env-file",
+    "Servers/.env.server",
 ]
 
 APP = [
-    "docker", "compose",
-    "-f", "docker-compose.app.yml",
-    "--env-file", "src/.env.app"
+    "docker",
+    "compose",
+    "-f",
+    "docker-compose.app.yml",
+    "--env-file",
+    "src/.env.app",
 ]
+
 
 def run(cmd):
     subprocess.run(cmd, check=True)
 
+
 def up():
-    
+
     print("Starting infrastructure...")
     run(SERVERS + ["up", "-d"])
 
@@ -53,38 +64,44 @@ def up():
     wait_for_healthy("vllm-server")
 
     print("Building app (quiet)...")
-    run(APP + ["build", "-q"])   
+    run(APP + ["build", "-q"])
 
     print("Starting app...")
-    run(APP + ["run", "--rm", "-it", "app"])         
+    run(APP + ["run", "--rm", "-it", "app"])
 
-    #attach()
+    # attach()
+
 
 def down():
     run(APP + ["down"])
     run(SERVERS + ["down"])
 
+
 def attach():
     print("Please enter your query:")
     run(["docker", "attach", "banking-agent"])
 
+
 def logs_app():
     run(APP + ["logs", "-f"])
+
 
 def logs_servers():
     run(SERVERS + ["logs", "-f"])
 
+
 def clean():
-    run(APP  + ["down", "-v", "--remove-orphans"])
+    run(APP + ["down", "-v", "--remove-orphans"])
     run(SERVERS + ["down", "-v", "--remove-orphans"])
 
+
 commands = {
-    "up":           up,
-    "down":         down,
-    "attach":       attach,
-    "logs-app":     logs_app,
+    "up": up,
+    "down": down,
+    "attach": attach,
+    "logs-app": logs_app,
     "logs-servers": logs_servers,
-    "clean":        clean,
+    "clean": clean,
 }
 
 if __name__ == "__main__":
