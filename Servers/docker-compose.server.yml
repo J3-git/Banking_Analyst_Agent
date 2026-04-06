@@ -1,0 +1,85 @@
+services:
+ 
+  postgres:
+    image: postgres:15
+    container_name: postgres-server
+    restart: unless-stopped
+    env_file:
+      - .env.server
+    environment:
+      TZ: Asia/Kolkata
+    ports:
+      - "5432:${POSTGRES_PORT}"
+    volumes:
+      - "${db_storage_path}:/var/lib/postgresql/data"   # persists data across restarts
+      - "${db_schema_path}:/docker-entrypoint-initdb.d/schema.sql"  # auto-runs schema on first start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - llm-net
+
+  db-init:
+    image: python:3.13-slim
+    container_name: db-init
+    env_file:
+      - .env.server
+    volumes:
+      - "${data_gen_script_path}:/app/pg-data-gen.py:ro"
+    working_dir: /app
+    command: >
+      sh -c "pip install
+      psycopg2-binary==2.9.11
+      Faker==40.11.1
+      python-dateutil==2.9.0.post0 -q 
+      && python pg-data-gen.py"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - llm-net
+    restart: "no"
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-server
+    runtime: nvidia
+    env_file:
+      - .env.server
+    ports:
+      - "8000:${VLLM_PORT}"
+    environment:
+      HF_HOME: /models
+    volumes:
+      - "${vllm_model_storage_path}:/models"
+    command: >
+      ${VLLM_MODEL}
+      --gpu-memory-utilization 0.80
+      --dtype auto
+      --language-model-only
+#      --max-model-len 1024
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${VLLM_PORT}/health"] # Command to run the health check
+      interval: 30s # How often to run the check
+      timeout: 10s # Maximum time allowed for the check to complete
+      retries: 3 # Number of consecutive failures to consider unhealthy
+      start_period: 900s # Grace period for the container to start and load the model
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - llm-net
+    restart: unless-stopped
+
+
+networks:
+  llm-net:
+    driver: bridge
+    name: llm-net 
+

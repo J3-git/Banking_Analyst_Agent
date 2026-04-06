@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+.venv/
+
+# Docker
+*.log
+
+# IDE
+.vscode/
+
+# Database
+db/                  
+*.db
+
+# Model files
+models/
+
+# Environment variables (if you add .env later)
+.env.app
+.env.server

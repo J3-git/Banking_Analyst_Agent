@@ -1,0 +1,24 @@
+services:
+
+  # Agent App
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: banking-agent
+    env_file:
+      - ./src/.env.app
+    environment:
+      - LOG_LEVEL=ERROR
+    volumes:
+      - "./exports:/app/exports"
+    networks:
+      - llm-net
+    stdin_open: true    # Keeps STDIN (input stream) open. allows input() in Python
+    tty: true           # Allocates a terminal (like a real shell). Needed for interactive CLI app
+    restart: unless-stopped
+
+# Joins the network created by Servers/docker-compose.server.yml 
+networks:
+  llm-net:
+    external: true          # don't create, just join
