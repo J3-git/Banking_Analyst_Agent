@@ -9,12 +9,11 @@ def get_help_node(state: AgentState) -> dict:
     Returns a structured guide of all agent capabilities with example queries for each tool.
     Triggered when user asks "help", "what can you do" etc.
     """
- 
+
     capabilities = [
         {
             "tool": "Customer Profile",
-            "description": 
-    """
+            "description": """
     Full profile of a specific customer:
     - personal details,
     - all their loans,
@@ -30,8 +29,7 @@ def get_help_node(state: AgentState) -> dict:
         },
         {
             "tool": "Overdue Loans",
-            "description": 
-    """
+            "description": """
     All loans that are currently overdue, defaulted, or NPA.
     Results are bucketed by severity — 1-30, 31-60, 61-90, 90+ days past due.
     """,
@@ -46,8 +44,7 @@ def get_help_node(state: AgentState) -> dict:
         },
         {
             "tool": "Repayment Summary",
-            "description": 
-    """
+            "description": """
     Full repayment history for a customer across all their loans or a specific loan.
     Includes:
     - on-time rate,
@@ -64,8 +61,7 @@ def get_help_node(state: AgentState) -> dict:
         },
         {
             "tool": "Loan Portfolio Stats",
-            "description": 
-    """
+            "description": """
     Aggregate statistics across all loans:
     - total disbursed
     - outstanding
@@ -85,9 +81,8 @@ def get_help_node(state: AgentState) -> dict:
             "optional": ["group by (loan type / city / status)", "city", "loan type"],
         },
         {
-            "tool":        "Collection Efficiency",
-            "description":
-    """
+            "tool": "Collection Efficiency",
+            "description": """
     How effectively overdue loans are being recovered.
     Shows recovery rate, amount collected vs due, and month-over-month trend
     """,
@@ -97,43 +92,55 @@ def get_help_node(state: AgentState) -> dict:
                 "Show collection efficiency for this quarter",
                 "Is our recovery rate improving or declining?",
             ],
-            "required":  [],
-            "optional":  ["city", "loan type", "period (this month / last month / this quarter / this year)"],
+            "required": [],
+            "optional": [
+                "city",
+                "loan type",
+                "period (this month / last month / this quarter / this year)",
+            ],
         },
     ]
- 
+
     # Supported filter values:
     filters = {
         "cities": ["Mumbai", "Delhi", "Pune", "Bangalore"],
         "loan_types": ["Personal", "Home", "Business", "Vehicle", "Education", "Gold"],
         "periods": ["this_month", "last_month", "this_quarter", "this_year"],
     }
- 
+
     # Usage tips:
     tips = [
         "You can combine filters — e.g. 'overdue home loans in Mumbai older than 30 days'",
         "For customer queries always provide a customer ID for best results",
         "Risk levels follow RBI DPD classification — CRITICAL means 90+ days overdue",
         "Collection efficiency shows recovery trends — useful for management reviews",
-        "Type 'help' anytime to see this guide again"
+        "Type 'help' anytime to see this guide again",
     ]
-    print(f"help executed. intent:{state["intent"]}")
+    print(f"help executed. intent:{state['intent']}")
 
     guide_lines = ["I can help you analyze loan data. Here's what you can ask:\n"]
 
-    for i, tool in enumerate(capabilities, 1):
-        guide_lines.append(f"{i}. {tool['tool']}")
-        guide_lines.append(f"   {tool['description'].strip()}")
-        guide_lines.append("   Example queries:")
-        for ex in tool["examples"]:
-            guide_lines.append(f"     - {ex}")
-        if tool["required"]:
-            guide_lines.append(f"   Required: {', '.join(tool['required'])}")
-        if tool["optional"]:
-            guide_lines.append(f"   Optional: {', '.join(tool['optional'])}")
-        guide_lines.append("")
+    guide_lines.append("I can help you analyze loan data.\n")
 
-    guide_lines.append("Tips:")
+    for i, tool in enumerate(capabilities, 1):
+        guide_lines.append(f"## {i}. {tool['tool']}\n")
+
+        guide_lines.append(tool["description"].strip() + "\n")
+
+        guide_lines.append("### Example Queries")
+        for ex in tool["examples"]:
+            guide_lines.append(f"- {ex}")
+
+        if tool["required"]:
+            guide_lines.append(f"\n**Required:** {', '.join(tool['required'])}")
+
+        if tool["optional"]:
+            guide_lines.append(f"\n**Optional:** {', '.join(tool['optional'])}")
+
+        guide_lines.append("\n---\n")
+
+    guide_lines.append("## Tips")
+
     for tip in tips:
         guide_lines.append(f"- {tip}")
 

@@ -1,6 +1,6 @@
 
 # Builder
-FROM python:3.13-slim AS builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN pip install --upgrade pip \
 
 
 # Runtime
-FROM python:3.13-slim AS runtime
+FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
@@ -30,4 +30,8 @@ COPY src/ ./src/
 RUN useradd -m -u 1001 appuser
 USER appuser
 
-CMD ["python", "-u", "src/main.py"]
+# # For CLI interaction
+# CMD ["python", "-u", "src/main.py"]
+
+# For gradio
+CMD ["python", "-u", "src/ui.py"]

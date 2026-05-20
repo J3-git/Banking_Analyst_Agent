@@ -65,16 +65,57 @@ CREATE TABLE loans (
 -- ------------------------------------------------------------
 -- 4. REPAYMENTS
 -- ------------------------------------------------------------
+-- CREATE TABLE repayments (
+--     repayment_id    SERIAL PRIMARY KEY,
+--     loan_id         INT           NOT NULL REFERENCES loans(loan_id),
+--     due_date        DATE          NOT NULL,
+--     paid_date       DATE,                         -- NULL if unpaid
+--     amount_due      NUMERIC(10,2) NOT NULL,
+--     amount_paid     NUMERIC(10,2) NOT NULL DEFAULT 0,
+--     dpd_days   INT           NOT NULL DEFAULT 0,
+--     status          VARCHAR(20)   NOT NULL
+--         CHECK (status IN ('PAID_ONTIME', 'PAID_LATE', 'MISSED', 'UPCOMING', 'PARTIAL'))
+-- );
+
+
 CREATE TABLE repayments (
     repayment_id    SERIAL PRIMARY KEY,
-    loan_id         INT           NOT NULL REFERENCES loans(loan_id),
-    due_date        DATE          NOT NULL,
-    paid_date       DATE,                         -- NULL if unpaid
+    loan_id         INT NOT NULL REFERENCES loans(loan_id),
+
+    due_date        DATE NOT NULL,
+    paid_date       DATE,
+
     amount_due      NUMERIC(10,2) NOT NULL,
     amount_paid     NUMERIC(10,2) NOT NULL DEFAULT 0,
-    days_past_due   INT           NOT NULL DEFAULT 0,
-    status          VARCHAR(20)   NOT NULL
-        CHECK (status IN ('PAID_ONTIME', 'PAID_LATE', 'MISSED', 'UPCOMING', 'PARTIAL'))
+
+    -- breakdown of payment allocation (FIFO ledger model)
+    amount_paid_emi       NUMERIC(10,2) NOT NULL DEFAULT 0,
+    amount_paid_late_fee  NUMERIC(10,2) NOT NULL DEFAULT 0,
+    amount_paid_penal     NUMERIC(10,2) NOT NULL DEFAULT 0,
+
+    -- delinquency tracking
+    dpd_days        INT NOT NULL DEFAULT 0,
+
+    -- live outstanding snapshot
+    outstanding_fees      NUMERIC(10,2) NOT NULL DEFAULT 0,
+    outstanding_balance   NUMERIC(10,2) NOT NULL DEFAULT 0,
+
+    status          VARCHAR(30) NOT NULL,
+
+    CHECK (status IN (
+        'PAID',
+        'PAID_LATE',
+        'PARTIAL',
+        'MISSED',
+        'UPCOMING',
+        'DEFAULTED',
+        'OVERDUE',
+        'PAID_PREVIOUS_DUES',
+        'PAID_FEES_PENDING',
+        'PARTIAL_RECOVERY',
+        'RECOVERY_PAYMENT',
+        'FEES_ONLY_PAYMENT'
+    ))
 );
 
 -- ------------------------------------------------------------

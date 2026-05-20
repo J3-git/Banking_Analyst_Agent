@@ -22,7 +22,7 @@ services:
       - llm-net
 
   db-init:
-    image: python:3.13-slim
+    image: python:3.11-slim
     container_name: db-init
     env_file:
       - .env.server
@@ -43,7 +43,7 @@ services:
     restart: "no"
 
   vllm:
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.17.0
     container_name: vllm-server
     runtime: nvidia
     env_file:
@@ -58,8 +58,8 @@ services:
       ${VLLM_MODEL}
       --gpu-memory-utilization 0.80
       --dtype auto
-      --language-model-only
-#      --max-model-len 1024
+      --max-model-len 167008
+      --language-model-only      
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${VLLM_PORT}/health"] # Command to run the health check
       interval: 30s # How often to run the check

@@ -2,9 +2,6 @@ import subprocess
 import sys
 import time
 
-import subprocess
-import time
-
 
 def wait_for_healthy(container_name, timeout=1200):
     start = time.time()
@@ -54,6 +51,24 @@ def run(cmd):
     subprocess.run(cmd, check=True)
 
 
+# # For CLI
+# def up():
+
+#     print("Starting infrastructure...")
+#     run(SERVERS + ["up", "-d"])
+
+#     print("Waiting for infrastructure to be ready...")
+#     wait_for_healthy("postgres-server")
+#     wait_for_healthy("vllm-server")
+
+#     print("Building app (quiet)...")
+#     run(APP + ["build", "-q"])
+
+#     print("Starting app...")
+#     run(APP + ["run", "--rm", "-it", "app"])
+
+
+# For gradio
 def up():
 
     print("Starting infrastructure...")
@@ -63,13 +78,8 @@ def up():
     wait_for_healthy("postgres-server")
     wait_for_healthy("vllm-server")
 
-    print("Building app (quiet)...")
-    run(APP + ["build", "-q"])
-
-    print("Starting app...")
-    run(APP + ["run", "--rm", "-it", "app"])
-
-    # attach()
+    print("Starting app (Gradio UI)...")
+    run(APP + ["up", "-d", "--build"])
 
 
 def down():

@@ -10,13 +10,17 @@ services:
       - ./src/.env.app
     environment:
       - LOG_LEVEL=ERROR
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7860
     volumes:
       - "./exports:/app/exports"
     networks:
       - llm-net
-    stdin_open: true    # Keeps STDIN (input stream) open. allows input() in Python
-    tty: true           # Allocates a terminal (like a real shell). Needed for interactive CLI app
+    # stdin_open: true    # Keeps STDIN (input stream) open. allows input() in Python. Needed for interactive CLI app
+    # tty: true           # Allocates a terminal (like a real shell). Needed for interactive CLI app
     restart: unless-stopped
+    ports:              # for gradio
+      - "7860:7860"
 
 # Joins the network created by Servers/docker-compose.server.yml 
 networks:
