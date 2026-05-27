@@ -1,15 +1,17 @@
 from pydantic import BaseModel
-from openai   import OpenAI
+from openai import OpenAI
+
 
 # HELPER — single LLM call with/without LM Format Enforcer
-def _call_llm(user_prompt: str,
-              model_name: str,
-              client : OpenAI,
-              model_class: type[BaseModel] | None = None,
-              system_prompt: str | None = None,
-              max_tokens: int = 200,
-              ) -> str:
-    
+def _call_llm(
+    user_prompt: str,
+    model_name: str,
+    client: OpenAI,
+    model_class: type[BaseModel] | None = None,
+    system_prompt: str | None = None,
+    max_tokens: int = 200,
+) -> BaseModel | str:
+
     if not system_prompt:
         system_prompt = """
             You are a Banking Loan Analyst AI.
@@ -45,18 +47,21 @@ def _call_llm(user_prompt: str,
             "structured_outputs": {
                 "json": model_class.model_json_schema(),
                 "_backend": "lm-format-enforcer",
-                "disable_fallback": True
+                "disable_fallback": True,
             }
         }
 
     response = client.chat.completions.create(
-    model=model_name,
-    messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_prompt},
-            ],
-    max_tokens=max_tokens,         # intent is short
-    temperature=0.0,       # deterministic — always pick most likely token
-    **kwargs
+        model=model_name,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        max_tokens=max_tokens,  # intent is short
+        temperature=0.0,  # deterministic — always pick most likely token
+        **kwargs
     )
+
+    if model_class:
+        return model_class.model_validate_json(response.choices[0].message.content)
     return response.choices[0].message.content.strip()

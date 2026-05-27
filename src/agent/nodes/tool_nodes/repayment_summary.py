@@ -1,12 +1,15 @@
-from agent.utils import _rows
-from psycopg2 import pool as pg_pool
-from psycopg2.extras import RealDictCursor
+from agent.utils import _serialize_value
+
 from agent.agent_state import (
     AgentState,
     RepaymentSummaryParams,
 )
 
-from agent.utils import maybe_export
+from langgraph.runtime import Runtime
+from agent.runtime_context import AppContext
+
+from agent.utils import export_csv
+from datetime import datetime, timezone
 
 BEHAVIOUR_MAP = {
     "GOOD": {
@@ -58,66 +61,146 @@ def _bad_score(rows):
 
 # Tool node to get repayment_summary:
 def get_repayment_summary_node(
-    state: AgentState, db_pool: pg_pool.SimpleConnectionPool
+    state: AgentState,
+    runtime: Runtime[AppContext],
 ) -> dict:
     """
     Returns repayment history for a customer: all loans or a specific loan.
     Includes trend analysis — is behaviour improving or worsening?
     """
-    params: RepaymentSummaryParams = state["tool_params"]
-    conn = db_pool.getconn()
+    params: RepaymentSummaryParams = state.get("tool_params")
+    if not isinstance(params, RepaymentSummaryParams):
+        return {
+            "tool_result": None,
+            "retrieved_data": state.get("retrieved_data", {}),
+            "execution_context": state.get("execution_context", {}),
+            "error": "Required parameters to process the repayment summary are either missing, invalid or could not be extracted.",
+        }
 
     try:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        db_client = runtime.context.db
 
-        # Validating whether the customer exists:
-        cur.execute(
-            "SELECT full_name FROM customers WHERE customer_id = %s",
-            (params.customer_id,),
-        )
+        with db_client.conn() as conn:
+            with db_client.cursor(conn, dict_cursor=True) as cur:
 
-        customer = cur.fetchone()
-        if not customer:
-            return {
-                "tool_result": None,
-                "error": f"Customer ID {params.customer_id} not found",
-            }
+                # Validating whether the customer exists:
+                cur.execute(
+                    "SELECT full_name FROM customers WHERE customer_id = %s",
+                    (params.customer_id,),
+                )
 
-        # Building loan filter:
-        loan_values = [params.customer_id]
-        loan_filter = "AND l.loan_id = %s" if params.loan_id else ""
-        if params.loan_id:
-            loan_values.append(params.loan_id)
+                customer = cur.fetchone()
+                if not customer:
+                    result = {
+                        "customer_name": None,
+                        # "repayments": [],
+                        "summary": {},
+                        "message": f"Customer ID : {params.customer_id} not found",
+                    }
 
-        # Repayment records
-        cur.execute(
-            f"""
-            SELECT
-                r.repayment_id,
-                r.loan_id,
-                l.loan_type,
-                r.due_date,
-                r.paid_date,
-                r.amount_due,
-                r.amount_paid,
-                r.dpd_days,
-                r.status
-            FROM repayments r
-            JOIN loans l ON r.loan_id = l.loan_id --Inner Join
-            WHERE l.customer_id = %s {loan_filter}
-            ORDER BY r.due_date DESC
-        """,
-            loan_values,
-        )
+                    execution_context = {
+                        **state.get("execution_context", {}),
+                        "last_tool": "get_repayment_summary",
+                        "active_customer_id": params.customer_id,
+                        "last_result_empty": True,
+                    }
 
-        repayments = _rows(cur)
+                    cache_key = f"repayment_summary:" f"{params.customer_id}"
+
+                    retrieved_data = {
+                        **state.get("retrieved_data", {}),
+                        cache_key: result,
+                        "fetched_at": datetime.now(timezone.utc).isoformat(),
+                    }
+
+                    return {
+                        "tool_result": result,
+                        "retrieved_data": retrieved_data,
+                        "execution_context": execution_context,
+                        "error": None,
+                    }
+
+                # Building query filter:
+                query_values = [params.customer_id]
+                loan_filter = ""
+
+                if params.loan_id:
+                    loan_filter = "AND l.loan_id = %s"
+                    query_values.append(params.loan_id)
+
+                # Fetch Repayment records
+                cur.execute(
+                    f"""
+                    SELECT
+                        r.repayment_id,
+                        r.loan_id,
+                        l.loan_type,
+                        r.due_date,
+                        r.paid_date,
+                        r.amount_due,
+                        r.amount_paid,
+                        r.dpd_days,
+                        r.status
+                    FROM repayments r
+                    JOIN loans l ON r.loan_id = l.loan_id --Inner Join
+                    WHERE l.customer_id = %s {loan_filter}
+                    ORDER BY r.due_date DESC
+                """,
+                    query_values,
+                )
+
+                rows = cur.fetchall()
+
+        repayments = [{k: _serialize_value(v) for k, v in row.items()} for row in rows]
 
         # payment behaviour summary
         past = [r for r in repayments if r["status"] != "UPCOMING"]
         total = len(past)
 
+        # EMPTY RESULT HANDLING
         if total == 0:
-            summary = {"message": "No past repayment records found"}
+            result = {
+                "customer_name": customer["full_name"],
+                **({"loan_id": params.loan_id} if params.loan_id else {}),
+                # "repayments": [],
+                "summary": {},
+                "message": (
+                    f"No past payment records found for Customer ID: {params.customer_id}"
+                    f"{f' and Loan ID: {params.loan_id}' if params.loan_id else ''}"
+                ),
+                "export_path": None,
+                "dataset_id": None,
+            }
+
+            execution_context = {
+                **state.get("execution_context", {}),
+                "last_tool": "get_repayment_summary",
+                "current_customer_id": params.customer_id,
+                "last_result_empty": True,
+                **({"active_loan_id": params.loan_id} if params.loan_id else {}),
+                "export_path": None,
+                "dataset_id": None,
+            }
+
+            cache_key = (
+                f"repayment_summary:"
+                f"{params.customer_id}:"
+                f"{params.loan_id or 'all'}"
+            )
+
+            retrieved_data = {
+                **state.get("retrieved_data", {}),
+                cache_key: result,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+            return {
+                "tool_result": result,
+                "retrieved_data": retrieved_data,
+                "execution_context": execution_context,
+                "error": None,
+            }
+
         else:
             good = sum(1 for r in past if _classify_status(r["status"]) == "GOOD")
             late = sum(1 for r in past if _classify_status(r["status"]) == "LATE")
@@ -158,19 +241,52 @@ def get_repayment_summary_node(
                 "payment_trend": trend,
             }
 
-        cur.close()
-        tool_result = {
+        dataset_id, export_path = export_csv(
+            prefix="repayment_summary", rows=repayments
+        )
+
+        result = {
             "customer_name": customer["full_name"],
-            "repayments": repayments,
+            **({"loan_id": params.loan_id} if params.loan_id else {}),
+            # "repayments": repayments,
             "summary": summary,
+            "total_repayment_records": len(repayments),
+            "export_path": export_path,
+            "dataset_id": dataset_id,
         }
-        excel_path = maybe_export("get_repayment_summary", tool_result)
-        return {"tool_result": tool_result, "excel_path": excel_path, "error": None}
+
+        # EXECUTION CONTEXT UPDATE
+        execution_context = {
+            **state.get("execution_context", {}),
+            "last_tool": "get_repayment_summary",
+            "current_customer_id": params.customer_id,
+            **({"active_loan_id": params.loan_id} if params.loan_id else {}),
+            "export_path": export_path,
+            "dataset_id": dataset_id,
+        }
+
+        # RETRIEVED DATA CACHE
+        cache_key = (
+            f"repayment_summary:" f"{params.customer_id}:" f"{params.loan_id or 'all'}"
+        )
+
+        retrieved_data = {
+            **state.get("retrieved_data", {}),
+            cache_key: result,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        return {
+            "tool_result": result,
+            "retrieved_data": retrieved_data,
+            "execution_context": execution_context,
+            "error": None,
+        }
 
     except Exception as e:
         return {
             "tool_result": None,
-            "error": f"get_repayment_summary tool failed: {str(e)}",
+            "retrieved_data": state.get("retrieved_data", {}),
+            "execution_context": state.get("execution_context", {}),
+            "error": f",get_repayment_summary tool failed: {str(e)}",
         }
-    finally:
-        db_pool.putconn(conn)

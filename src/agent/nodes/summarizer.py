@@ -1,222 +1,183 @@
 import json
 from openai import OpenAI
-from agent.agent_state import (
-    AgentState,
-)
-
+from langgraph.runtime import Runtime
+from agent.agent_state import AgentState
+from agent.runtime_context import AppContext
 from agent.utils import _call_llm
 
 SYSTEM_PROMPT = """
-You are a banking analyst assistant. Convert structured loan data into clear, actionable summaries.
+You are a senior banking analyst.
+
+Convert structured loan system outputs into clear business insights.
 
 Rules:
-- Do NOT include any reasoning or <think> tags.
-- Start with the most important insight
-- Use Indian currency format (₹, lakh, crore)
-- Highlight critical issues
-- Be professional and concise
-- Do not invent data
-- Recommend actions for risks or trends
-- Keep responses under 150 words unless necessary
+- No reasoning tags or hidden thoughts
+- Start with key insight
+- Use ₹ formatting (lakh/crore)
+- Be concise and action-oriented
+- Highlight risks clearly
+- Do not hallucinate
+- If data is missing, explicitly say so
 """
 
-# Each intent gets a tailored instruction so the LLM knows how to frame the response for that specific tool.
+
 INTENT_PROMPTS = {
     "get_customer_profile": """
-Summarise this customer profile for a loan officer preparing for a review.
-Structure your response as:
-1. Customer basics (name, employment, income, credit score)
-2. Loan summary (how many loans, total outstanding)
-3. Risk assessment (risk level and why)
-4. Recommended action based on risk level
+Summarise customer profile for credit review.
+
+Include:
+1. Customer overview
+2. Loan exposure summary
+3. Risk level interpretation
+4. Recommended action
 """,
     "get_overdue_loans": """
-Summarise these overdue loans for a loan officer.
-Structure your response as:
-1. Total count and overall outstanding amount
-2. Severity breakdown using DPD buckets
-3. Most critical cases by name with days overdue
-4. Recommended priority actions
-Frame this as an action list — loan officers need to know what to do next.
+Summarise overdue loan portfolio for collections team.
+
+Include:
+1. Total overdue exposure
+2. DPD bucket distribution (early/moderate/serious/critical)
+3. Top critical cases (most important borrowers)
+4. Action priority list
 """,
     "get_repayment_summary": """
-Summarise this customer's repayment behaviour for a loan officer.
-Structure your response as:
-1. Payment Behaviour
-   - Distribution of repayment statuses (GOOD, LATE, BAD, PARTIAL_RECOVERY, UPCOMING)
-   - Overall discipline based on mix of statuses
-2. Recent Trend
-   - Use payment_trend (IMPROVING / STABLE / DETERIORATING / INSUFFICIENT_DATA)
-3. Risk Signals
-   - Presence of BAD statuses (MISSED, OVERDUE, DEFAULTED)
-   - Any pattern of worsening behaviour or repeated bad payments
-4. Recommended Action
-   - Brief action based on trend and risk (monitor / follow-up / escalate / review)
+Summarise repayment behaviour of the customer.
+
+Include:
+1. Payment behaviour breakdown
+2. Average DPD and delinquency pattern
+3. Trend (improving / stable / deteriorating)
+4. Recommended follow-up action
 """,
     "get_loan_portfolio_stats": """
-Summarise these portfolio statistics for a branch manager.
-Structure your response as:
-1. Portfolio health overview (total loans, outstanding, default rate)
-2. Key findings from the breakdown — which group is performing worst?
-3. Any groups flagged as high default rate
+Summarise portfolio-wide performance.
+
+Include:
+1. Overall portfolio health
+2. Worst performing segment
+3. Risk concentration
 4. Management recommendation
 """,
     "get_collection_efficiency": """
-Summarise collection efficiency for a branch manager.
-Structure your response as:
-1. Current recovery rate and what it means
-2. Amount collected vs uncollected in rupees
-3. Trend — improving, stable, or declining
-4. Management action if declining
+Summarise collection efficiency.
+
+Include:
+1. Recovery performance
+2. Collection gaps
+3. Trend analysis
+4. Operational recommendation
 """,
     "get_help": """
-Present agent capabilities as a simple guide:
-- Start with a brief intro
-- List each capability with one example query
-- End with 2–3 usage tips
-
-Keep it clear and beginner-friendly.
+Explain system capabilities in simple language with examples.
 """,
     "unknown": """
-The query could not be matched to any known capability.
-Politely explain this and suggest the user ask for help
-to see what queries are supported.
+Explain that request is not understood and suggest using help.
 """,
 }
 
 
-# Helper functions
-def _format_currency(amount: float) -> str:
+# -------------------------
+# HELPERS
+# -------------------------
+
+
+def _safe_intent(intent):
+    if hasattr(intent, "value"):
+        return intent.value
+    return intent or "unknown"
+
+
+def _extract_data(intent: str, tool_result: dict) -> str:
     """
-    Converts a float to Indian currency string.
-    e.g. 4500000 - ₹45 lakh
-         12500000 - ₹1.25 crore
-         450000   - ₹4.5 lakh
+    Normalize different tool outputs into LLM-friendly JSON.
     """
-    if amount >= 10_000_000:
-        return f"₹{amount / 10_000_000:.2f} crore"
-    elif amount >= 100_000:
-        return f"₹{amount / 100_000:.1f} lakh"
-    else:
-        return f"₹{amount:,.0f}"
 
-
-def _top_n(rows: list, n: int = 3) -> list:
-    """Return first N rows — used for worst-case illustration only."""
-    return rows[:n]
-
-
-def _prepare_result_for_prompt(tool_result: dict, intent: str) -> str:
-    """
-    Converts tool_result dict to a clean string for the LLM prompt.
-
-    Strategy — never send raw row lists to the LLM:
-      - Aggregate stats (counts, totals, rates)
-      - Raw rows (individual loans/customers) -> replaced with top 3 worst cases for illustration only
-      - Full dataset always goes to CSV — not to the LLM
-
-    This ensures the LLM summary is based on complete aggregate data not a misleading truncated slice of rows.
-    (Handling lower context window/token count of smaller models)
-    """
-    if tool_result is None:
+    if not tool_result:
         return "No data available."
 
-    summary = {}
-
+    # OVERDUE LOANS (your new structure)
     if intent == "get_overdue_loans":
-        loans = tool_result.get("loans", [])
-        summary = {
-            "total_overdue": tool_result.get("total_overdue"),
-            "dpd_buckets": tool_result.get("dpd_buckets"),
-            # Top 3 most critical loans for illustration
-            "top_3_critical": _top_n(loans, 3),
-            "note": (
-                (
-                    f"Full list of {len(loans)} loans exported to CSV. "
-                    "Summary above covers all loans."
-                )
-                if len(loans) > 3
-                else None
-            ),
-        }
-
-    elif intent == "get_repayment_summary":
-        repayments = tool_result.get("repayments", [])
-        summary = {
-            "customer_name": tool_result.get("customer_name"),
-            # Summary stats cover all repayments — no need for raw rows
-            "summary": tool_result.get("summary"),
-            "note": (
-                (
-                    f"Full repayment history of {len(repayments)} records "
-                    "exported to CSV."
-                )
-                if len(repayments) > 10
-                else None
-            ),
-        }
-
-    else:
-        # For all other intents — no large row lists expected
-        # Send tool_result as-is
-        summary = tool_result
-
-    # Remove None values to keep prompt clean
-    summary = {k: v for k, v in summary.items() if v is not None}
-    return json.dumps(summary, indent=2, default=str)
-
-
-# SUMMARIZER NODE
-def summarize_node(state: AgentState, client: OpenAI, model_name: str) -> dict:
-    """
-    converts tool_result to natural language.
-
-    Uses two-part prompt:
-      System: professional guidelines
-      User: intent-specific framing + structured tool result data
-    """
-    intent = state["intent"]
-    tool_result = state["tool_result"]
-    user_query = state["user_query"]
-
-    # Get intent-specific instruction
-    intent_instruction = INTENT_PROMPTS.get(intent, INTENT_PROMPTS["unknown"])
-
-    # Prepare tool result for prompt
-    result_str = _prepare_result_for_prompt(tool_result, intent)
-
-    # Build user prompt
-    user_prompt = f"""Original query: "{user_query}"
- 
-        {intent_instruction}
-        
-        Data to summarise:
-        {result_str}
-        
-        Write your summary now:
-        """
-
-    try:
-        # messages=[
-        #         {"role": "system", "content": SYSTEM_PROMPT},
-        #         {"role": "user",   "content": user_prompt},
-        #     ]
-        # print(f"message: {messages}")
-        summarizer_response = _call_llm(
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-            max_tokens=300,
-            client=client,
-            model_name=model_name,
+        return json.dumps(
+            {
+                "total_overdue": tool_result.get("overall", {}).get("total_overdue"),
+                "dpd_buckets": tool_result.get("dpd_buckets"),
+                "top_critical": tool_result.get("top_critical", []),
+                "export_path": tool_result.get("export_path"),
+            },
+            indent=2,
+            default=str,
         )
 
-        # Append Excel file path if tool node generated one
-        excel_path = state.get("excel_path")
-        if excel_path:
-            summarizer_response += f"\n\n Full data exported to Excel: {excel_path}"
+    # REPAYMENT SUMMARY
+    if intent == "get_repayment_summary":
+        return json.dumps(
+            {
+                "customer_name": tool_result.get("customer_name"),
+                "summary": tool_result.get("summary"),
+                "total_records": tool_result.get("total_repayment_records"),
+            },
+            indent=2,
+            default=str,
+        )
 
-        return {"final_response": summarizer_response, "error": None}
+    # CUSTOMER PROFILE / OTHERS
+    return json.dumps(tool_result, indent=2, default=str)
+
+
+# -------------------------
+# MAIN NODE
+# -------------------------
+
+
+def summarize_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
+
+    # CONTEXT
+    client = runtime.context.client
+    model_name = runtime.context.model_name
+
+    # STATE
+    intent = _safe_intent(state.get("intent"))
+    tool_result = state.get("tool_result")
+    user_query = state.get("user_query", "")
+
+    intent_instruction = INTENT_PROMPTS.get(intent, INTENT_PROMPTS["unknown"])
+
+    structured_data = _extract_data(intent, tool_result)
+
+    user_prompt = f"""
+User Query:
+"{user_query}"
+
+Instruction:
+{intent_instruction}
+
+Data:
+{structured_data}
+
+Generate a clear banking analyst summary.
+"""
+
+    try:
+        response = _call_llm(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            client=client,
+            model_name=model_name,
+            max_tokens=350,
+        )
+
+        export_path = state.get("execution_context", {}).get("export_path")
+
+        if export_path:
+            response += f"\n\nExport file available at: {export_path}"
+
+        return {
+            "final_response": response,
+            "error": None,
+        }
 
     except Exception as e:
-        print(e)
-        return {"final_response": None, "error": f"Summarization failed: {str(e)}"}
+        return {
+            "final_response": None,
+            "error": f"Summarization failed: {str(e)}",
+        }

@@ -2,6 +2,10 @@ import os
 from psycopg2 import pool as pg_pool
 from openai import OpenAI
 
+from agent import DBClient
+from langgraph.runtime import Runtime
+from agent import AppContext
+
 # from dotenv import load_dotenv
 from agent import run_query, build_graph
 from pathlib import Path
@@ -50,13 +54,19 @@ def main():
         print(f"DB connections closed.")
         return
 
+    # runtime context
+    db_client = DBClient(db_pool)
+
+    app_context = AppContext(
+        user_id=DB_CONFIG.get("user", "guest"),
+        model_name=MODEL_NAME,
+        client=llm_client,
+        db=db_client,
+    )
+
     # Build graph once
     print("Building agent graph...")
-    graph = build_graph(
-        db_pool=db_pool,
-        llm_client=llm_client,
-        model_name=MODEL_NAME,
-    )
+    graph = build_graph()
     print("Graph compiled")
 
     # To create flowchart image
@@ -86,7 +96,11 @@ def main():
                 break
 
             print("\nProcessing...\n")
-            response = run_query(graph, user_input)
+            response = run_query(
+                graph=graph,
+                user_query=user_input,
+                runtime=Runtime[app_context],
+            )
             print(f"Response:\n{response}")
 
         except KeyboardInterrupt:

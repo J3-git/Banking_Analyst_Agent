@@ -47,9 +47,9 @@ DB_CONFIG = {
 
 # GENERATION SETTINGS
 
-NUM_EMPLOYEES = 2
-NUM_CUSTOMERS = 5
-NUM_LOANS = 10  # some customers will get multiple loans
+NUM_EMPLOYEES = 5
+NUM_CUSTOMERS = 25
+NUM_LOANS = 50  # some customers will get multiple loans
 
 fake = Faker("en_IN")  # Indian locale — realistic names, cities
 random.seed(100)  # reproducible results
@@ -316,6 +316,358 @@ def derive_loan_status(repayment_records):
 #     return repayments
 
 
+# def generate_repayment_pattern_fifo(
+#     emi_amount,
+#     disbursed_date,
+#     tenure_months,
+#     principal,
+#     annual_interest_rate,
+#     late_fee_flat=500,
+#     grace_period_days=3,
+#     penal_annual_rate=0.02,
+#     seed=None,
+# ):
+#     rng = random.Random(seed)
+
+#     monthly_rate = annual_interest_rate / (12 * 100)
+#     penal_daily_rate = penal_annual_rate / 365
+
+#     outstanding_balance = principal
+
+#     profile = rng.choices(
+#         ["good", "occasional_late", "struggling", "defaulter"], weights=[50, 25, 15, 10]
+#     )[0]
+
+#     risk = {
+#         "good": 0.05,
+#         "occasional_late": 0.20,
+#         "struggling": 0.50,
+#         "defaulter": 0.80,
+#     }[profile]
+
+#     # prob_full = 1 - risk
+#     # prob_partial = risk * 0.5
+
+#     repayments = []
+#     dues_queue = []
+
+#     max_extra_months = 12
+#     total_months = tenure_months + max_extra_months
+#     for i in range(total_months):
+#         is_recovery_phase = i >= tenure_months
+#         cycle_due_date = disbursed_date + relativedelta(months=i + 1)
+#         prev_cycle_date = disbursed_date + relativedelta(months=i)
+#         days_in_cycle = (cycle_due_date - prev_cycle_date).days
+
+#         # Mark overdue_since only for EMI dues whose due date has passed
+#         for due in dues_queue:
+#             if (
+#                 due["kind"] == "emi"
+#                 and due["remaining"] > 0
+#                 and due.get("overdue_since") is None
+#             ):
+#                 grace_deadline = due["due_date"] + timedelta(days=grace_period_days)
+#                 if cycle_due_date > grace_deadline:
+#                     due["overdue_since"] = grace_deadline + timedelta(days=1)
+
+#         # Penal entries (buffered)
+#         new_penal_entries = []
+#         for due in dues_queue:
+#             if (
+#                 due["kind"] == "emi"
+#                 and due["remaining"] > 0
+#                 and due.get("overdue_since")
+#             ):
+#                 penal_charge = round(
+#                     due["remaining"] * penal_daily_rate * days_in_cycle, 2
+#                 )
+#                 if penal_charge > 0:
+#                     new_penal_entries.append(
+#                         {
+#                             "kind": "penal",
+#                             "due_date": due["overdue_since"],
+#                             "remaining": penal_charge,
+#                             "linked_emi_date": due["due_date"],
+#                         }
+#                     )
+#         dues_queue.extend(new_penal_entries)
+
+#         # Late fee (one-time)
+#         new_late_fees = []
+#         for due in dues_queue:
+#             if (
+#                 due["kind"] == "emi"
+#                 and due["remaining"] > 0
+#                 and due.get("overdue_since")
+#             ):
+
+#                 already_exists = any(
+#                     d["kind"] == "late_fee" and d["linked_emi_date"] == due["due_date"]
+#                     for d in dues_queue
+#                 )
+
+#                 if not already_exists:
+#                     new_late_fees.append(
+#                         {
+#                             "kind": "late_fee",
+#                             "due_date": due["overdue_since"],
+#                             "remaining": late_fee_flat,
+#                             "linked_emi_date": due["due_date"],
+#                         }
+#                     )
+#         dues_queue.extend(new_late_fees)
+
+#         # Step 4: add EMI only within tenure
+#         if not is_recovery_phase:
+#             dues_queue.append(
+#                 {
+#                     "kind": "emi",
+#                     "due_date": cycle_due_date,
+#                     "remaining": emi_amount,
+#                     "overdue_since": None,
+#                 }
+#             )
+
+#         # Step 5: compute total obligation
+#         total_emi_due = sum(d["remaining"] for d in dues_queue if d["kind"] == "emi")
+#         total_fee_due = sum(
+#             d["remaining"] for d in dues_queue if d["kind"] in ("late_fee", "penal")
+#         )
+#         total_obligation = total_emi_due + total_fee_due
+
+#         # Step 6: payment behavior
+#         roll = rng.random()
+
+#         if is_recovery_phase:
+
+#             total_due = outstanding_balance + open_fees
+
+#             if total_due <= 0:
+#                 payment = 0
+
+#             else:
+#                 if profile == "good":
+#                     if total_due > emi_amount * 2:
+#                         payment = total_due * rng.uniform(0.4, 0.9)
+#                     else:
+#                         payment = total_due
+
+#                 elif profile == "occasional_late":
+#                     payment = total_due * rng.uniform(0.2, 0.6)
+
+#                 elif profile == "struggling":
+#                     payment = emi_amount * rng.uniform(0.2, 0.6)
+
+#                 else:  # defaulter
+#                     payment = emi_amount * rng.uniform(0, 0.2)
+
+#         else:
+#             ratio = outstanding_balance / emi_amount if emi_amount > 0 else 0
+
+#             if profile == "good":
+
+#                 if ratio > 2:
+#                     payment = emi_amount * rng.uniform(1.0, 1.5)
+
+#                 else:
+#                     payment = outstanding_balance  # clear fully
+
+#             elif profile == "occasional_late":
+
+#                 if ratio > 2:
+#                     payment = emi_amount * rng.uniform(0.7, 1.0)
+#                 else:
+#                     payment = outstanding_balance * rng.uniform(0.8, 1.0)
+
+#             elif profile == "struggling":
+
+#                 if ratio > 2:
+#                     payment = emi_amount * rng.uniform(0.3, 0.7)
+#                 else:
+#                     payment = emi_amount * rng.uniform(0.5, 1.0)
+
+#             else:  # defaulter
+
+#                 if ratio > 2:
+#                     payment = emi_amount * rng.uniform(0.1, 0.4)
+#                 else:
+#                     payment = outstanding_balance * rng.uniform(0.3, 0.8)
+
+#         payment = round(payment, 2)
+
+#         # Generate realistic paid_date
+#         if payment == 0:
+#             paid_date = None
+#         else:
+#             roll_time = rng.random()
+
+#             prob_on_time = {
+#                 "good": 0.9,
+#                 "occasional_late": 0.7,
+#                 "struggling": 0.5,
+#                 "defaulter": 0.3,
+#             }[profile]
+
+#             if roll_time < prob_on_time:
+#                 earliest_paid = max(disbursed_date, cycle_due_date - timedelta(days=2))
+#                 paid_date = earliest_paid + timedelta(
+#                     days=rng.randint(0, (cycle_due_date - earliest_paid).days)
+#                 )
+#             else:
+#                 # Late payment
+#                 paid_date = cycle_due_date + timedelta(days=rng.randint(1, 30))
+
+#         # Sort dues (correct priority)
+#         kind_priority = {"late_fee": 0, "penal": 1, "emi": 2}
+#         dues_queue.sort(key=lambda d: (d["due_date"], kind_priority[d["kind"]]))
+
+#         # FIFO allocation
+#         available_payment = payment
+
+#         paid_emi = 0.0
+#         paid_late_fee = 0.0
+#         paid_penal = 0.0
+#         allocated_to_current_emi = 0.0
+
+#         for due in dues_queue:
+#             if available_payment <= 0:
+#                 break
+#             if due["remaining"] <= 0:
+#                 continue
+
+#             allocation = min(available_payment, due["remaining"])
+
+#             due["remaining"] = round(due["remaining"] - allocation, 2)
+#             if abs(due["remaining"]) < 0.01:
+#                 due["remaining"] = 0
+
+#             available_payment = round(available_payment - allocation, 2)
+
+#             if due["kind"] == "emi":
+#                 paid_emi += allocation
+
+#                 if due["due_date"] == cycle_due_date:
+#                     allocated_to_current_emi += allocation
+
+#             elif due["kind"] == "late_fee":
+#                 paid_late_fee += allocation
+#             elif due["kind"] == "penal":
+#                 paid_penal += allocation
+
+#         # Identify current EMI
+#         current_emi = next(
+#             (
+#                 d
+#                 for d in dues_queue
+#                 if d["kind"] == "emi" and d["due_date"] == cycle_due_date
+#             ),
+#             None,
+#         )
+
+#         open_fees = sum(
+#             d["remaining"]
+#             for d in dues_queue
+#             if d["kind"] in ("late_fee", "penal") and d["remaining"] > 0
+#         )
+
+#         # Status logic (improved with paid_date awareness)
+
+#         if is_recovery_phase:
+
+#             # Recovery phase = no structured EMI cycle anymore
+
+#             if payment == 0:
+#                 status = "MISSED"
+
+#             else:
+#                 # pure allocation-based classification
+#                 if paid_emi > 0 and (paid_late_fee > 0 or paid_penal > 0):
+#                     status = "PARTIAL_RECOVERY"
+
+#                 elif paid_emi > 0:
+#                     status = "RECOVERY_PAYMENT"
+
+#                 elif paid_late_fee > 0 or paid_penal > 0:
+#                     status = "FEES_ONLY_PAYMENT"
+
+#                 else:
+#                     status = "MISSED"
+
+#         else:
+#             # TENURE PHASE
+#             if current_emi is None:
+#                 raise f"logic error"
+
+#             elif payment == 0:
+#                 status = "MISSED"
+
+#             elif current_emi["remaining"] == 0:
+#                 if paid_date and paid_date > cycle_due_date:
+#                     status = "PAID_LATE"
+#                 else:
+#                     status = "PAID" if open_fees == 0 else "PAID_FEES_PENDING"
+
+#             elif current_emi["remaining"] < emi_amount:
+#                 status = "PARTIAL"
+
+#             elif allocated_to_current_emi == 0 and payment > 0:
+#                 status = "PAID_PREVIOUS_DUES"
+
+#             else:
+#                 status = "MISSED"
+
+#         # Interest update
+#         interest = outstanding_balance * monthly_rate
+
+#         if payment > 0:
+#             interest_paid = min(paid_emi, interest)
+#             principal_paid = paid_emi - interest_paid
+#             outstanding_balance -= principal_paid
+#         else:
+#             outstanding_balance += interest
+
+#         outstanding_balance = round(max(0, outstanding_balance), 2)
+
+#         # Cleanup
+#         dues_queue = [d for d in dues_queue if d["remaining"] > 0]
+
+#         # Rolling DPD (based on cycle, not today)
+#         dpd_days = max(
+#             (
+#                 (cycle_due_date - d["overdue_since"]).days
+#                 for d in dues_queue
+#                 if d["kind"] == "emi" and d["remaining"] > 0 and d.get("overdue_since")
+#             ),
+#             default=0,
+#         )
+#         dpd_days = max(0, dpd_days)
+
+#         # Save record
+#         repayments.append(
+#             {
+#                 "due_date": cycle_due_date,
+#                 "paid_date": paid_date,
+#                 "amount_due": emi_amount if i < tenure_months else 0,
+#                 "amount_paid": payment,
+#                 "amount_paid_emi": round(paid_emi, 2),
+#                 "amount_paid_late_fee": round(paid_late_fee, 2),
+#                 "amount_paid_penal": round(paid_penal, 2),
+#                 "dpd_days": dpd_days,
+#                 "outstanding_fees": round(open_fees, 2),
+#                 "outstanding_balance": outstanding_balance,
+#                 "status": status,
+#                 #                "profile": profile,
+#             }
+#         )
+
+#         # stop if fully closed
+#         if is_recovery_phase:
+#             if outstanding_balance <= emi_amount * 0.1:
+#                 break
+
+#     return repayments
+
+
 def generate_repayment_pattern_fifo(
     emi_amount,
     disbursed_date,
@@ -345,15 +697,17 @@ def generate_repayment_pattern_fifo(
         "defaulter": 0.80,
     }[profile]
 
-    # prob_full = 1 - risk
-    # prob_partial = risk * 0.5
-
     repayments = []
     dues_queue = []
 
     max_extra_months = 12
     total_months = tenure_months + max_extra_months
+
+    # reference date for UPCOMING logic
+    today = date.today()
+
     for i in range(total_months):
+
         is_recovery_phase = i >= tenure_months
         cycle_due_date = disbursed_date + relativedelta(months=i + 1)
         prev_cycle_date = disbursed_date + relativedelta(months=i)
@@ -400,7 +754,6 @@ def generate_repayment_pattern_fifo(
                 and due["remaining"] > 0
                 and due.get("overdue_since")
             ):
-
                 already_exists = any(
                     d["kind"] == "late_fee" and d["linked_emi_date"] == due["due_date"]
                     for d in dues_queue
@@ -458,36 +811,31 @@ def generate_repayment_pattern_fifo(
                 elif profile == "struggling":
                     payment = emi_amount * rng.uniform(0.2, 0.6)
 
-                else:  # defaulter
+                else:
                     payment = emi_amount * rng.uniform(0, 0.2)
 
         else:
             ratio = outstanding_balance / emi_amount if emi_amount > 0 else 0
 
             if profile == "good":
-
                 if ratio > 2:
                     payment = emi_amount * rng.uniform(1.0, 1.5)
-
                 else:
-                    payment = outstanding_balance  # clear fully
+                    payment = outstanding_balance
 
             elif profile == "occasional_late":
-
                 if ratio > 2:
                     payment = emi_amount * rng.uniform(0.7, 1.0)
                 else:
                     payment = outstanding_balance * rng.uniform(0.8, 1.0)
 
             elif profile == "struggling":
-
                 if ratio > 2:
                     payment = emi_amount * rng.uniform(0.3, 0.7)
                 else:
                     payment = emi_amount * rng.uniform(0.5, 1.0)
 
-            else:  # defaulter
-
+            else:
                 if ratio > 2:
                     payment = emi_amount * rng.uniform(0.1, 0.4)
                 else:
@@ -514,7 +862,6 @@ def generate_repayment_pattern_fifo(
                     days=rng.randint(0, (cycle_due_date - earliest_paid).days)
                 )
             else:
-                # Late payment
                 paid_date = cycle_due_date + timedelta(days=rng.randint(1, 30))
 
         # Sort dues (correct priority)
@@ -545,7 +892,6 @@ def generate_repayment_pattern_fifo(
 
             if due["kind"] == "emi":
                 paid_emi += allocation
-
                 if due["due_date"] == cycle_due_date:
                     allocated_to_current_emi += allocation
 
@@ -554,7 +900,6 @@ def generate_repayment_pattern_fifo(
             elif due["kind"] == "penal":
                 paid_penal += allocation
 
-        # Identify current EMI
         current_emi = next(
             (
                 d
@@ -570,33 +915,33 @@ def generate_repayment_pattern_fifo(
             if d["kind"] in ("late_fee", "penal") and d["remaining"] > 0
         )
 
-        # Status logic (improved with paid_date awareness)
+        # -------------------------
+        # STATUS LOGIC (WITH UPCOMING)
+        # -------------------------
 
         if is_recovery_phase:
-
-            # Recovery phase = no structured EMI cycle anymore
 
             if payment == 0:
                 status = "MISSED"
 
             else:
-                # pure allocation-based classification
                 if paid_emi > 0 and (paid_late_fee > 0 or paid_penal > 0):
                     status = "PARTIAL_RECOVERY"
-
                 elif paid_emi > 0:
                     status = "RECOVERY_PAYMENT"
-
                 elif paid_late_fee > 0 or paid_penal > 0:
                     status = "FEES_ONLY_PAYMENT"
-
                 else:
                     status = "MISSED"
 
         else:
-            # TENURE PHASE
-            if current_emi is None:
-                raise f"logic error"
+
+            # UPCOMING LOGIC ADDED HERE
+            if cycle_due_date > today:
+                status = "UPCOMING"
+
+            elif current_emi is None:
+                raise Exception("logic error")
 
             elif payment == 0:
                 status = "MISSED"
@@ -610,7 +955,7 @@ def generate_repayment_pattern_fifo(
             elif current_emi["remaining"] < emi_amount:
                 status = "PARTIAL"
 
-            elif allocated_to_current_emi == 0 and payment > 0:
+            elif allocated_to_current_emi == 0:
                 status = "PAID_PREVIOUS_DUES"
 
             else:
@@ -631,7 +976,7 @@ def generate_repayment_pattern_fifo(
         # Cleanup
         dues_queue = [d for d in dues_queue if d["remaining"] > 0]
 
-        # Rolling DPD (based on cycle, not today)
+        # DPD
         dpd_days = max(
             (
                 (cycle_due_date - d["overdue_since"]).days
@@ -640,9 +985,7 @@ def generate_repayment_pattern_fifo(
             ),
             default=0,
         )
-        dpd_days = max(0, dpd_days)
 
-        # Save record
         repayments.append(
             {
                 "due_date": cycle_due_date,
@@ -656,14 +999,11 @@ def generate_repayment_pattern_fifo(
                 "outstanding_fees": round(open_fees, 2),
                 "outstanding_balance": outstanding_balance,
                 "status": status,
-                #                "profile": profile,
             }
         )
 
-        # stop if fully closed
-        if is_recovery_phase:
-            if outstanding_balance <= emi_amount * 0.1:
-                break
+        if is_recovery_phase and outstanding_balance <= emi_amount * 0.1:
+            break
 
     return repayments
 
