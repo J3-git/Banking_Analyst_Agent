@@ -42,40 +42,40 @@ services:
       - llm-net
     restart: "no"
 
-  vllm:
-    image: vllm/vllm-openai:v0.17.0
-    container_name: vllm-server
-    runtime: nvidia
-    env_file:
-      - .env.server
-    ports:
-      - "8000:${VLLM_PORT}"
-    environment:
-      HF_HOME: /models
-    volumes:
-      - "${vllm_model_storage_path}:/models"
-    command: >
-      ${VLLM_MODEL}
-      --gpu-memory-utilization 0.80
-      --dtype auto
-      --max-model-len 167008
-      --language-model-only      
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${VLLM_PORT}/health"] # Command to run the health check
-      interval: 30s # How often to run the check
-      timeout: 10s # Maximum time allowed for the check to complete
-      retries: 3 # Number of consecutive failures to consider unhealthy
-      start_period: 900s # Grace period for the container to start and load the model
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    networks:
-      - llm-net
-    restart: unless-stopped
+  # vllm:
+  #   image: vllm/vllm-openai:v0.17.0
+  #   container_name: vllm-server
+  #   runtime: nvidia
+  #   env_file:
+  #     - .env.server
+  #   ports:
+  #     - "8000:${VLLM_PORT}"
+  #   environment:
+  #     HF_HOME: /models
+  #   volumes:
+  #     - "${vllm_model_storage_path}:/models"
+  #   command: >
+  #     ${VLLM_MODEL}
+  #     --gpu-memory-utilization 0.80
+  #     --dtype auto
+  #     --max-model-len 167008
+  #     --language-model-only      
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:${VLLM_PORT}/health"] # Command to run the health check
+  #     interval: 30s # How often to run the check
+  #     timeout: 10s # Maximum time allowed for the check to complete
+  #     retries: 3 # Number of consecutive failures to consider unhealthy
+  #     start_period: 900s # Grace period for the container to start and load the model
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   networks:
+  #     - llm-net
+  #   restart: unless-stopped
 
 
 networks:

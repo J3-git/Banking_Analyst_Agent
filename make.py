@@ -76,7 +76,7 @@ def up():
 
     print("Waiting for infrastructure to be ready...")
     wait_for_healthy("postgres-server")
-    wait_for_healthy("vllm-server")
+    # wait_for_healthy("vllm-server")
 
     print("Starting app (Gradio UI)...")
     run(APP + ["up", "-d", "--build"])

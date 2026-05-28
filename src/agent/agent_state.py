@@ -198,6 +198,9 @@ class AgentState(TypedDict):
     # ERROR HANDLING
     error: Optional[str]
 
+    enriched_query: str  # resolved query from context_node
+    needs_db: bool  # routing signal from context_node
+
 
 # INITIAL STATE FACTORY
 
@@ -232,40 +235,49 @@ class AgentState(TypedDict):
 from langchain_core.messages import HumanMessage, AIMessage
 
 
-def create_initial_state(user_query: str, history: list) -> AgentState:
+def create_initial_state(
+    user_query: str,
+    history: list | None = None,
+) -> AgentState:
     """
-    Create graph state containing past conversation history and the new query.
+    Create per-turn initial state.
+
+    IMPORTANT:
+    - Persistent memory (execution_context, retrieved_data, messages)
+      comes from LangGraph checkpointing.
+    - We only initialize transient per-turn fields here.
     """
-    # 1. Convert Gradio dict history into LangChain Message objects
+
     formatted_messages = []
+
+    # Optional UI history hydration
+    # Useful mainly for first load / external chat UIs like Gradio
     if history:
         for turn in history:
-            if turn["role"] == "user":
-                formatted_messages.append(HumanMessage(content=turn["content"]))
-            elif turn["role"] == "assistant":
-                formatted_messages.append(AIMessage(content=turn["content"]))
 
-    # 2. Append the brand new query as the final HumanMessage
+            role = turn.get("role")
+            content = turn.get("content")
+
+            if not content:
+                continue
+
+            if role == "user":
+                formatted_messages.append(HumanMessage(content=content))
+
+            elif role == "assistant":
+                formatted_messages.append(AIMessage(content=content))
+
+    # Add current user query
     formatted_messages.append(HumanMessage(content=user_query))
 
     return {
-        # USER INPUT
         "user_query": user_query,
-        # MEMORY - LangGraph nodes will now see the entire chat history
         "messages": formatted_messages,
-        "conversation_summary": "",
-        # INTENT EXTRACTION
+        "execution_context": {},
         "intent": None,
         "tool_params": None,
-        # WORKING MEMORY
-        "execution_context": {},
-        # TOOL MEMORY
-        "retrieved_data": {},
-        # CURRENT EXECUTION
         "tool_result": None,
-        # RESPONSE
         "final_response": None,
         "export_path": None,
-        # ERROR
         "error": None,
     }

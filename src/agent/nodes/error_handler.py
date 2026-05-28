@@ -215,7 +215,10 @@ def handle_error_node(state: AgentState) -> dict:
 
     # TOOL / SYSTEM ERROR
     if error:
-
+        print("==========================================================")
+        print(f"DEBUG:in error handler node:")
+        print(f"DEBUG:error: {error}")
+        print("==========================================================")
         return {
             "final_response": (
                 f"Request failed.\n\n"
