@@ -221,12 +221,12 @@ from langgraph.graph.message import add_messages
 
 
 def _keep_last(left: Any, right: Any) -> Any:
-    """Last write wins — used for scalar fields written by parallel branches."""
+    """Last write wins -- used for scalar fields written by parallel branches."""
     return right if right is not None else left
 
 
 def _merge_dicts(left: dict, right: dict) -> dict:
-    """Merge two dicts — used for retrieved_data written by parallel branches."""
+    """Merge two dicts -- used for retrieved_data written by parallel branches."""
     if not left:
         return right or {}
     if not right:
@@ -417,7 +417,7 @@ class AgentState(TypedDict):
     # tool execution outputs (written ONLY by tool nodes)
     # tool_results is a list to support compare (two results in one turn)
     tool_result: Annotated[Optional[Any], _keep_last]  # single result - standard flow
-    tool_results: Annotated[list[Any], _reset_or_append]  # multi-result — compare flow
+    tool_results: Annotated[list[Any], _reset_or_append]  # multi-result -- compare flow
 
     # retrieved data cache
     # key: "intent:param1_val:param2_val:..."

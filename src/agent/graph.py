@@ -445,7 +445,7 @@ def route_after_parse(state: AgentState) -> str:
 
 def route_after_compare_tool(state: AgentState) -> str:
     """
-    After tool execution — routes to merge if compare flow, else summarize.
+    After tool execution -- routes to merge if compare flow, else summarize.
     Detects compare flow by presence of compare_keys in state.
     """
     if state.get("error"):
@@ -457,7 +457,7 @@ def route_after_compare_tool(state: AgentState) -> str:
 
 def route_after_merge(state: AgentState) -> str:
     """
-    After merge_node — always visualize then summarize.
+    After merge_node -- always visualize then summarize.
     """
     if state.get("error"):
         return "handle_error"
@@ -466,7 +466,7 @@ def route_after_merge(state: AgentState) -> str:
 
 def route_after_visualize(state: AgentState) -> str:
     """
-    After visualize_node — always summarize.
+    After visualize_node -- always summarize.
     Errors are non-fatal: chart generation failure should not block summary.
     """
     return "summarize"
@@ -501,7 +501,7 @@ def build_graph() -> StateGraph:
     # entry point
     graph.set_entry_point("context")
 
-    # context → followup or parse
+    # context -> followup or parse
     graph.add_conditional_edges(
         "context",
         route_after_context,
@@ -511,7 +511,7 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # followup → visualize or response or handle_error
+    # followup -> visualize or response or handle_error
     graph.add_conditional_edges(
         "followup",
         route_after_followup,
@@ -522,14 +522,14 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # compare node → tool nodes via route_compare (returns list[Send] or "handle_error")
+    # compare node -> tool nodes via route_compare (returns list[Send] or "handle_error")
     graph.add_conditional_edges(
         "compare",
         route_compare,
         {"handle_error": "handle_error"},
     )
 
-    # parse → compare_router or tool node or handle_error
+    # parse -> compare_router or tool node or handle_error
     graph.add_conditional_edges(
         "parse",
         route_after_parse,
@@ -545,7 +545,7 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # all tool nodes use smart router — detects compare flow via compare_keys
+    # all tool nodes use smart router -- detects compare flow via compare_keys
     all_tool_nodes = [
         "get_customer_profile",
         "get_overdue_loans",
@@ -564,7 +564,7 @@ def build_graph() -> StateGraph:
             },
         )
 
-    # merge → visualize or handle_error
+    # merge -> visualize or handle_error
     graph.add_conditional_edges(
         "merge",
         route_after_merge,
@@ -574,7 +574,7 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # visualize → summarize (errors non-fatal)
+    # visualize -> summarize (errors non-fatal)
     graph.add_conditional_edges(
         "visualize",
         route_after_visualize,
@@ -624,10 +624,10 @@ def run_query(
     current_state = graph.get_state(config)
 
     if not current_state.values:
-        # first turn — hydrate messages from UI history if provided
+        # first turn -- hydrate messages from UI history if provided
         input_state = create_initial_state(user_query=user_query, history=history)
     else:
-        # turn 2+ — reset transient fields, checkpointer carries persistent fields
+        # turn 2+ -- reset transient fields, checkpointer carries persistent fields
         input_state = create_initial_state(user_query=user_query)
 
     print("==========================================================")

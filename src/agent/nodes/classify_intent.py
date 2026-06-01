@@ -238,7 +238,7 @@ def parse_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
         # execution_context is an ExecutionContext BaseModel - serialize for LLM prompt
         execution_context = state.get("execution_context")
         if execution_context:
-            # strip heavy fields — last_tool_result and last_response are too large
+            # strip heavy fields -- last_tool_result and last_response are too large
             # for intent classification and param extraction
             raw = execution_context.to_dict()
             execution_context_dict = {

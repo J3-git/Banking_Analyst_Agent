@@ -1559,7 +1559,7 @@ def generate_repayment_pattern_fifo(
                     payment = emi_amount * rng.uniform(0.05, 0.3)
 
         else:
-            # roll < miss_probability → full miss for this cycle
+            # roll < miss_probability -> full miss for this cycle
             if roll < miss_probability:
                 payment = 0.0
             else:
