@@ -123,7 +123,7 @@ def _call_llm(
     )
 
     print(f"DEBUG: In call_llm ")
-    print(f"DEBUG: call_llm parsewd output: {response.choices[0].message.content}")
+    print(f"DEBUG: call_llm parsed output: {response.choices[0].message.content}")
 
     if model_class:
         return model_class.model_validate_json(response.choices[0].message.content)

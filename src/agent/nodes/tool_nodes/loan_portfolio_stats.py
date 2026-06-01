@@ -81,7 +81,12 @@ def get_loan_portfolio_stats_node(
                     WHERE (%s IS NULL OR c.city = %s)
                     AND (%s IS NULL OR l.loan_type = %s)
                     """,
-                    (params.city, params.city, params.loan_type, params.loan_type),
+                    (
+                        params.city.value,
+                        params.city.value,
+                        params.loan_type.value,
+                        params.loan_type.value,
+                    ),
                 )
 
                 overall_row = cur.fetchone()
@@ -142,7 +147,12 @@ def get_loan_portfolio_stats_node(
                     GROUP BY {group_expr}
                     ORDER BY default_rate_pct DESC NULLS LAST
                     """,
-                    (params.city, params.city, params.loan_type, params.loan_type),
+                    (
+                        params.city.value,
+                        params.city.value,
+                        params.loan_type.value,
+                        params.loan_type.value,
+                    ),
                 )
 
                 breakdown = []

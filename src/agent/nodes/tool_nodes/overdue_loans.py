@@ -49,11 +49,11 @@ def get_overdue_loans_node(
 
                 if params.city:
                     conditions.append("c.city = %s")
-                    values.append(params.city)
+                    values.append(params.city.value)
 
                 if params.loan_type:
                     conditions.append("l.loan_type = %s")
-                    values.append(params.loan_type)
+                    values.append(params.loan_type.value)
 
                 if params.min_days_overdue:
                     conditions.append("""
