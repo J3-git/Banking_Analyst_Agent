@@ -2,12 +2,10 @@ from agent.utils import _serialize_value
 from agent.agent_state import (
     AgentState,
     LoanPortfolioStatsParams,
+    RetrievedDataEntry,
 )
-
 from langgraph.runtime import Runtime
 from agent.runtime_context import AppContext
-
-from datetime import datetime, timezone
 
 ALLOWED_GROUP_EXPRESSIONS = {
     "city": "c.city",
@@ -16,7 +14,6 @@ ALLOWED_GROUP_EXPRESSIONS = {
 }
 
 
-# Tool node to get ovloan_portfolio_stats:
 def get_loan_portfolio_stats_node(
     state: AgentState,
     runtime: Runtime[AppContext],
@@ -29,17 +26,31 @@ def get_loan_portfolio_stats_node(
     - filtering by city / loan_type
     - default rate analytics
     - risk flagging
+
+    Ownership rules:
+      - This node writes ONLY to: tool_result, tool_results, retrieved_data, error
     """
 
     params: LoanPortfolioStatsParams = state.get("tool_params")
 
     if not isinstance(params, LoanPortfolioStatsParams):
         return {
-            "tool_result": None,
-            "retrieved_data": state.get("retrieved_data", {}),
-            "execution_context": state.get("execution_context", {}),
             "error": "Required parameters to retrieve portfolio statistics are either missing, invalid or could not be extracted.",
         }
+
+    # resolve group_by early - needed for cache_key in both empty and success paths
+    group_col = (
+        params.group_by.value
+        if params.group_by.value in ALLOWED_GROUP_EXPRESSIONS
+        else "loan_type"
+    )
+
+    cache_key = (
+        f"portfolio_stats:"
+        f"{group_col}:"
+        f"{params.city.value if params.city else 'all'}:"
+        f"{params.loan_type.value if params.loan_type else 'all'}"
+    )
 
     try:
         db_client = runtime.context.db
@@ -47,8 +58,7 @@ def get_loan_portfolio_stats_node(
         with db_client.conn() as conn:
             with db_client.cursor(conn, dict_cursor=True) as cur:
 
-                # Overall portfolio summary:
-                # Overall portfolio summary
+                # overall portfolio summary
                 cur.execute(
                     """
                     SELECT
@@ -62,37 +72,23 @@ def get_loan_portfolio_stats_node(
                         SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) AS closed,
                         ROUND(
                             100.0 * SUM(
-                                CASE
-                                    WHEN status IN ('DEFAULTED', 'NPA')
-                                    THEN 1
-                                    ELSE 0
-                                END
+                                CASE WHEN status IN ('DEFAULTED', 'NPA') THEN 1 ELSE 0 END
                             ) / NULLIF(COUNT(*), 0),
                             2
                         ) AS default_rate_pct
                     FROM loans l
-                    JOIN customers c
-                        ON l.customer_id = c.customer_id
-                    WHERE (%s IS NULL OR c.city = %s)  --If given city, filter by it. If provided NULL, don't filter at all."
+                    JOIN customers c ON l.customer_id = c.customer_id
+                    WHERE (%s IS NULL OR c.city = %s)
                     AND (%s IS NULL OR l.loan_type = %s)
                     """,
-                    (
-                        params.city,
-                        params.city,
-                        params.loan_type,
-                        params.loan_type,
-                    ),
+                    (params.city, params.city, params.loan_type, params.loan_type),
                 )
 
                 overall_row = cur.fetchone()
-
                 overall = {k: _serialize_value(v) for k, v in overall_row.items()}
 
-                # EMPTY DATA HANDLING
+                # empty result
                 if not overall or (overall.get("total_loans") or 0) == 0:
-
-                    group_col = params.group_by or "loan_type"
-
                     result = {
                         "overall": {
                             "total_loans": 0,
@@ -105,49 +101,27 @@ def get_loan_portfolio_stats_node(
                         "message": "No loan portfolio data found for given filters.",
                     }
 
-                    # update context
-                    execution_context = {
-                        **state.get("execution_context", {}),
-                        "last_tool": "get_loan_portfolio_stats",
-                        "active_group_by": group_col,
-                        "last_result_empty": True,
-                        **({"active_city": params.city} if params.city else {}),
-                        **(
-                            {"active_loan_type": params.loan_type}
-                            if params.loan_type
-                            else {}
-                        ),
-                    }
-
-                    cache_key = (
-                        f"portfolio_stats:"
-                        f"{group_col}:"
-                        f"{params.city or 'all'}:"
-                        f"{params.loan_type or 'all'}"
+                    entry = RetrievedDataEntry(
+                        intent="get_loan_portfolio_stats",
+                        params=params.model_dump(exclude_none=True),
+                        result=result,
                     )
 
                     retrieved_data = {
                         **state.get("retrieved_data", {}),
-                        cache_key: result,
-                        "fetched_at": datetime.now(timezone.utc).isoformat(),
+                        cache_key: entry.model_dump(),
                     }
 
                     return {
                         "tool_result": result,
+                        "tool_results": [result],
                         "retrieved_data": retrieved_data,
-                        "execution_context": execution_context,
                         "error": None,
                     }
 
-                # GROUP BY CONFIGURATION
-                group_col = (
-                    params.group_by
-                    if params.group_by in ALLOWED_GROUP_EXPRESSIONS
-                    else "loan_type"
-                )
+                # breakdown analytics
                 group_expr = ALLOWED_GROUP_EXPRESSIONS[group_col]
 
-                # BREAKDOWN ANALYTICS
                 cur.execute(
                     f"""
                     SELECT
@@ -157,91 +131,69 @@ def get_loan_portfolio_stats_node(
                         SUM(l.outstanding_amount) AS total_outstanding,
                         ROUND(
                             100.0 * SUM(
-                                CASE
-                                    WHEN l.status IN ('DEFAULTED', 'NPA')
-                                    THEN 1
-                                    ELSE 0
-                                END
+                                CASE WHEN l.status IN ('DEFAULTED', 'NPA') THEN 1 ELSE 0 END
                             ) / NULLIF(COUNT(*), 0),
                             2
                         ) AS default_rate_pct
                     FROM loans l
-                    JOIN customers c
-                        ON l.customer_id = c.customer_id
+                    JOIN customers c ON l.customer_id = c.customer_id
                     WHERE (%s IS NULL OR c.city = %s)
                     AND (%s IS NULL OR l.loan_type = %s)
                     GROUP BY {group_expr}
                     ORDER BY default_rate_pct DESC NULLS LAST
                     """,
-                    (
-                        params.city,
-                        params.city,
-                        params.loan_type,
-                        params.loan_type,
-                    ),
+                    (params.city, params.city, params.loan_type, params.loan_type),
                 )
 
                 breakdown = []
-
                 for row in cur.fetchall():
-
                     group = {k: _serialize_value(v) for k, v in row.items()}
-
                     rate = group.get("default_rate_pct") or 0
-
                     if rate >= 15:
                         group["risk_flag"] = "HIGH default rate"
-
                     elif rate >= 8:
                         group["risk_flag"] = "MODERATE default rate"
-
                     else:
                         group["risk_flag"] = "Healthy"
-
                     breakdown.append(group)
 
-        # FINAL RESULT
         result = {
             "overall": overall,
             "grouped_by": group_col,
             "breakdown": breakdown,
         }
 
-        # EXECUTION CONTEXT UPDATE
-        execution_context = {
-            **state.get("execution_context", {}),
-            "last_tool": "get_loan_portfolio_stats",
-            "active_group_by": group_col,
-            **({"active_city": params.city} if params.city else {}),
-            **({"active_loan_type": params.loan_type} if params.loan_type else {}),
-        }
-
-        # RETRIEVED DATA CACHE
-        cache_key = (
-            f"portfolio_stats:"
-            f"{group_col}:"
-            f"{params.city or 'all'}:"
-            f"{params.loan_type or 'all'}"
+        entry = RetrievedDataEntry(
+            intent="get_loan_portfolio_stats",
+            params=params.model_dump(exclude_none=True),
+            result=result,
         )
 
         retrieved_data = {
             **state.get("retrieved_data", {}),
-            cache_key: result,
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            cache_key: entry.model_dump(),
         }
 
-        # RETURN STATE UPDATE
+        print("==========================================================")
+        print("DEBUG: in get_loan_portfolio_stats_node:")
+        print(f"DEBUG: cache_key: {cache_key}")
+        print(f"DEBUG: total_loans: {overall.get('total_loans')}")
+        print(f"DEBUG: default_rate_pct: {overall.get('default_rate_pct')}")
+        print("==========================================================")
+
         return {
             "tool_result": result,
+            "tool_results": [result],
             "retrieved_data": retrieved_data,
-            "execution_context": execution_context,
             "error": None,
         }
 
     except Exception as e:
+        print("==========================================================")
+        print("DEBUG: in get_loan_portfolio_stats_node exception occurred:")
+        print(f"DEBUG: error: {e}")
+        print("==========================================================")
+
         return {
-            "tool_result": None,
-            "retrieved_data": state.get("retrieved_data", {}),
-            "execution_context": state.get("execution_context", {}),
             "error": f"get_loan_portfolio_stats failed: {str(e)}",
         }

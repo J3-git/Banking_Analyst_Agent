@@ -1,5 +1,5 @@
 -- ============================================================
--- Banking / Loan Analyst Assistant — PostgreSQL Schema
+-- Banking / Loan Analyst Assistant - PostgreSQL Schema
 -- 5 tables: customers, employees, loans, repayments, loan_assignments
 -- ============================================================
 

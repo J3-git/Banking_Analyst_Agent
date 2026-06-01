@@ -29,7 +29,7 @@
 #     Routes to the correct tool node based on intent.
 #     If classification itself failed (error set) -> go to error handler.
 #     """
-#     # If classifier set an error — skip tools entirely
+#     # If classifier set an error - skip tools entirely
 #     if state.get("error"):
 #         return "handle_error"
 
@@ -70,7 +70,7 @@
 #     Builds and compiles the LangGraph graph.
 
 #     Args:
-#         db_pool: psycopg2 connection pool — shared across all tool nodes
+#         db_pool: psycopg2 connection pool - shared across all tool nodes
 #         llm_client: OpenAI client pointed at vLLM container
 #         model_name: model loaded in vLLM e.g. "Qwen/Qwen2.5-1.5B-Instruct"
 
@@ -172,86 +172,92 @@
 #     return final_state.get("final_response", "No response generated.")
 
 
-from langgraph.graph import StateGraph, END
+# from langgraph.graph import StateGraph, END
 
-# from langgraph.runtime import Runtime
+# # from langgraph.runtime import Runtime
 
-from agent.agent_state import AgentState, create_initial_state, Intent
-from agent.runtime_context import AppContext
+# from agent.agent_state import AgentState, create_initial_state, Intent
+# from agent.runtime_context import AppContext
 
-# Nodes
-from agent.nodes import (
-    parse_node,
-    summarize_node,
-    handle_error_node,
-    response_node,
-    context_node,
-    followup_node,
-)
+# # Nodes
+# from agent.nodes import (
+#     parse_node,
+#     summarize_node,
+#     handle_error_node,
+#     response_node,
+#     context_node,
+#     followup_node,
+# )
 
-from agent.nodes.tool_nodes import (
-    get_customer_profile_node,
-    get_overdue_loans_node,
-    get_repayment_summary_node,
-    get_loan_portfolio_stats_node,
-    get_collection_efficiency_node,
-    get_help_node,
-)
+# from agent.nodes.tool_nodes import (
+#     get_customer_profile_node,
+#     get_overdue_loans_node,
+#     get_repayment_summary_node,
+#     get_loan_portfolio_stats_node,
+#     get_collection_efficiency_node,
+#     get_help_node,
+# )
 
-from langgraph.checkpoint.memory import InMemorySaver
+# from langgraph.checkpoint.memory import InMemorySaver
 
 # ROUTING FUNCTIONS
 
 
-def route_after_context(state: AgentState) -> str:
-    """
-    Called after context_node.
-    Short-circuits to followup if no DB call needed.
-    """
-    if state.get("error"):
-        return "handle_error"
+# def route_after_context(state: AgentState) -> str:
+#     """
+#     Called after context_node.
+#     Short-circuits to followup if no DB call needed.
+#     """
+#     if state.get("error"):
+#         return "handle_error"
 
-    if not state.get("needs_db", True):
-        return "followup"
+#     if not state.get("needs_db", True):
+#         return "followup"
 
-    return "parse"
-
-
-def route_to_tool(state: AgentState) -> str:
-    """
-    Called after parse node.
-    Routes to the correct tool node based on intent.
-    """
-
-    if state.get("error"):
-        return "handle_error"
-
-    intent = state.get("intent", "unknown")
-    routing_map = {
-        Intent.GET_CUSTOMER_PROFILE: "get_customer_profile",
-        Intent.GET_OVERDUE_LOANS: "get_overdue_loans",
-        Intent.GET_REPAYMENT_SUMMARY: "get_repayment_summary",
-        Intent.GET_LOAN_PORTFOLIO_STATS: "get_loan_portfolio_stats",
-        Intent.GET_COLLECTION_EFFICIENCY: "get_collection_efficiency",
-        Intent.GET_HELP: "get_help",
-        Intent.UNKNOWN: "handle_error",
-    }
-    return routing_map.get(intent, "handle_error")
+#     return "parse"
 
 
-def route_after_tool(state: AgentState) -> str:
-    """
-    Called after tool execution.
-    """
+# def route_after_context(state: AgentState) -> str:
+#     if state["is_followup"] and not state["needs_db"]:
+#         return "followup"
+#     return "parse"
 
-    if state.get("error"):
-        return "handle_error"
 
-    return "summarize"
+# def route_to_tool(state: AgentState) -> str:
+#     """
+#     Called after parse node.
+#     Routes to the correct tool node based on intent.
+#     """
+
+#     if state.get("error"):
+#         return "handle_error"
+
+#     intent = state.get("intent", "unknown")
+#     routing_map = {
+#         Intent.GET_CUSTOMER_PROFILE: "get_customer_profile",
+#         Intent.GET_OVERDUE_LOANS: "get_overdue_loans",
+#         Intent.GET_REPAYMENT_SUMMARY: "get_repayment_summary",
+#         Intent.GET_LOAN_PORTFOLIO_STATS: "get_loan_portfolio_stats",
+#         Intent.GET_COLLECTION_EFFICIENCY: "get_collection_efficiency",
+#         Intent.GET_HELP: "get_help",
+#         Intent.UNKNOWN: "handle_error",
+#     }
+#     return routing_map.get(intent, "handle_error")
+
+
+# def route_after_tool(state: AgentState) -> str:
+#     """
+#     Called after tool execution.
+#     """
+
+#     if state.get("error"):
+#         return "handle_error"
+
+#     return "summarize"
 
 
 # Checkpoint
-checkpointer = InMemorySaver()
+# checkpointer = InMemorySaver()
 
 # GRAPH BUILDING
 
@@ -353,70 +359,181 @@ checkpointer = InMemorySaver()
 #     return graph.compile(checkpointer=checkpointer)
 
 
+from langgraph.graph import StateGraph, END
+from langgraph.types import Send
+
+from agent.agent_state import (
+    AgentState,
+    FollowUpType,
+    Intent,
+    create_initial_state,
+)
+from agent.runtime_context import AppContext
+
+from agent.nodes import (
+    parse_node,
+    summarize_node,
+    handle_error_node,
+    response_node,
+    context_node,
+    followup_node,
+)
+
+from agent.nodes.tool_nodes import (
+    get_customer_profile_node,
+    get_overdue_loans_node,
+    get_repayment_summary_node,
+    get_loan_portfolio_stats_node,
+    get_collection_efficiency_node,
+    get_help_node,
+)
+
+from agent.nodes.compare_node import compare_node, route_compare
+from agent.nodes.merge_node import merge_node
+from agent.nodes.visualize_node import visualize_node
+
+from langgraph.checkpoint.memory import InMemorySaver
+
+# ROUTING FUNCTIONS
+
+
+def route_after_context(state: AgentState) -> str:
+    if state.get("is_followup") and not state.get("needs_db"):
+        return "followup"
+    return "parse"
+
+
+def route_after_followup(state: AgentState) -> str:
+    """
+    Followup node handles conversational answers.
+    If follow_up_type is VISUALIZE, route to visualize_node.
+    Otherwise go straight to response.
+    """
+    if state.get("error"):
+        return "handle_error"
+
+    if state.get("follow_up_type") == FollowUpType.VISUALIZE:
+        return "visualize"
+
+    return "response"
+
+
+def route_after_parse(state: AgentState) -> str:
+    """
+    Routes to compare node for compare intent,
+    or directly to the correct tool node otherwise.
+    """
+    if state.get("error"):
+        return "handle_error"
+
+    if state.get("follow_up_type") == FollowUpType.COMPARE:
+        return "compare"
+
+    intent = state.get("intent", Intent.UNKNOWN)
+    routing_map = {
+        Intent.GET_CUSTOMER_PROFILE: "get_customer_profile",
+        Intent.GET_OVERDUE_LOANS: "get_overdue_loans",
+        Intent.GET_REPAYMENT_SUMMARY: "get_repayment_summary",
+        Intent.GET_LOAN_PORTFOLIO_STATS: "get_loan_portfolio_stats",
+        Intent.GET_COLLECTION_EFFICIENCY: "get_collection_efficiency",
+        Intent.GET_HELP: "get_help",
+        Intent.UNKNOWN: "handle_error",
+    }
+    return routing_map.get(intent, "handle_error")
+
+
+def route_after_compare_tool(state: AgentState) -> str:
+    """
+    After tool execution — routes to merge if compare flow, else summarize.
+    Detects compare flow by presence of compare_keys in state.
+    """
+    if state.get("error"):
+        return "handle_error"
+    if state.get("compare_keys"):
+        return "merge"
+    return "summarize"
+
+
+def route_after_merge(state: AgentState) -> str:
+    """
+    After merge_node — always visualize then summarize.
+    """
+    if state.get("error"):
+        return "handle_error"
+    return "visualize"
+
+
+def route_after_visualize(state: AgentState) -> str:
+    """
+    After visualize_node — always summarize.
+    Errors are non-fatal: chart generation failure should not block summary.
+    """
+    return "summarize"
+
+
+# GRAPH BUILDER
+
+checkpointer = InMemorySaver()
+
+
 def build_graph() -> StateGraph:
-    """
-    Build and compile LangGraph workflow.
-    """
 
     graph = StateGraph(state_schema=AgentState, context_schema=AppContext)
 
-    # CONTEXT ENRICHER
+    # nodes
     graph.add_node("context", context_node)
-
-    # FOLLOW UP NODE
     graph.add_node("followup", followup_node)
-
-    # PARSER
     graph.add_node("parse", parse_node)
-
-    # TOOL NODES
+    graph.add_node("compare", compare_node)
+    graph.add_node("merge", merge_node)
+    graph.add_node("visualize", visualize_node)
     graph.add_node("get_customer_profile", get_customer_profile_node)
-
     graph.add_node("get_overdue_loans", get_overdue_loans_node)
-
-    graph.add_node(
-        "get_repayment_summary",
-        get_repayment_summary_node,
-    )
-
-    graph.add_node(
-        "get_loan_portfolio_stats",
-        get_loan_portfolio_stats_node,
-    )
-
-    graph.add_node(
-        "get_collection_efficiency",
-        get_collection_efficiency_node,
-    )
-
+    graph.add_node("get_repayment_summary", get_repayment_summary_node)
+    graph.add_node("get_loan_portfolio_stats", get_loan_portfolio_stats_node)
+    graph.add_node("get_collection_efficiency", get_collection_efficiency_node)
     graph.add_node("get_help", get_help_node)
-
-    # FINAL NODES
     graph.add_node("summarize", summarize_node)
-
     graph.add_node("response", response_node)
-
     graph.add_node("handle_error", handle_error_node)
 
-    # ENTRY POINT
+    # entry point
     graph.set_entry_point("context")
 
-    # routing after context
+    # context → followup or parse
     graph.add_conditional_edges(
         "context",
         route_after_context,
         {
             "followup": "followup",
             "parse": "parse",
+        },
+    )
+
+    # followup → visualize or response or handle_error
+    graph.add_conditional_edges(
+        "followup",
+        route_after_followup,
+        {
+            "visualize": "visualize",
+            "response": "response",
             "handle_error": "handle_error",
         },
     )
 
-    # ROUTING AFTER PARSE
+    # compare node → tool nodes via route_compare (returns list[Send] or "handle_error")
+    graph.add_conditional_edges(
+        "compare",
+        route_compare,
+        {"handle_error": "handle_error"},
+    )
+
+    # parse → compare_router or tool node or handle_error
     graph.add_conditional_edges(
         "parse",
-        route_to_tool,
+        route_after_parse,
         {
+            "compare": "compare",
             "get_customer_profile": "get_customer_profile",
             "get_overdue_loans": "get_overdue_loans",
             "get_repayment_summary": "get_repayment_summary",
@@ -427,57 +544,49 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # ROUTING AFTER TOOLS
-    tool_nodes = [
+    # all tool nodes use smart router — detects compare flow via compare_keys
+    all_tool_nodes = [
         "get_customer_profile",
         "get_overdue_loans",
         "get_repayment_summary",
         "get_loan_portfolio_stats",
         "get_collection_efficiency",
     ]
-
-    for tool_node in tool_nodes:
-
+    for tool_node in all_tool_nodes:
         graph.add_conditional_edges(
             tool_node,
-            route_after_tool,
+            route_after_compare_tool,
             {
+                "merge": "merge",
                 "summarize": "summarize",
                 "handle_error": "handle_error",
             },
         )
 
-    # FIXED EDGES
-    # graph.add_edge("get_help", END)
-    # graph.add_edge("summarize", END)
-    # graph.add_edge("handle_error", END)
+    # merge → visualize or handle_error
+    graph.add_conditional_edges(
+        "merge",
+        route_after_merge,
+        {
+            "visualize": "visualize",
+            "handle_error": "handle_error",
+        },
+    )
 
-    graph.add_edge(
-        "get_help", "response"
-    )  # Route directly to response to log system help text
+    # visualize → summarize (errors non-fatal)
+    graph.add_conditional_edges(
+        "visualize",
+        route_after_visualize,
+        {
+            "summarize": "summarize",
+        },
+    )
 
-    graph.add_edge(
-        "summarize", "response"
-    )  # Route summarize results into response formatter
-
-    graph.add_edge("handle_error", "response")  # Route fallback errors into response
-
-    # followup fixed edge
-    graph.add_edge("followup", "response")
-
+    # fixed edges
+    graph.add_edge("get_help", "response")
+    graph.add_edge("summarize", "response")
+    graph.add_edge("handle_error", "response")
     graph.add_edge("response", END)
-
-    # # To create flowchart image
-    # import os
-
-    # os.makedirs("./exports", exist_ok=True)
-    # graph = graph.compile(checkpointer=checkpointer)
-    # graph_visual = graph.get_graph()
-    # graph_visual_png = graph_visual.draw_mermaid_png()
-    # with open("./exports/graph.png", "wb") as f:
-    #     f.write(graph_visual_png)
-    # print("Graph image saved in exports directory.")
-    # return graph
 
     return graph.compile(checkpointer=checkpointer)
 
@@ -485,28 +594,36 @@ def build_graph() -> StateGraph:
 # QUERY RUNNER
 
 
-def run_query(graph, user_query: str, context: AppContext, history: list = None) -> str:
+def run_query(
+    graph,
+    user_query: str,
+    context: AppContext,
+    thread_id: str,
+    history: list = None,
+) -> str:
     """
-    Execute one query through graph, passing down multi-turn history.
+    Execute one query through the graph.
+    Always uses create_initial_state to reset transient fields.
+    Persistent fields (execution_context, retrieved_data, csv_paths,
+    chart_paths) are carried forward by the checkpointer.
     """
-    # Pass history
-    config = {"configurable": {"thread_id": "1"}}
 
-    # Check if this thread already has memory stored in the checkpointer
+    config = {"configurable": {"thread_id": thread_id}}
+
     current_state = graph.get_state(config)
 
     if not current_state.values:
-        # Fresh thread. Run your full setup tool.
+        # first turn — hydrate messages from UI history if provided
         input_state = create_initial_state(user_query=user_query, history=history)
     else:
-        # TURN 2+: Reused thread.
-        # Only pass the fresh transient query. LangGraph automatically fetches your previous messages and execution_context from memory!
-        input_state = {"user_query": user_query}
+        # turn 2+ — reset transient fields, checkpointer carries persistent fields
+        input_state = create_initial_state(user_query=user_query)
 
-    print(f"DEBUG:in run_query:")
-    print(f"DEBUG:current_state: {current_state}")
-    print(f"DEBUG:input_state: {input_state}")
-    print(f"DEBUG:history: {history}")
+    print("==========================================================")
+    print("DEBUG: in run_query:")
+    print(f"DEBUG: user_query: {user_query}")
+    print(f"DEBUG: has_prior_state: {bool(current_state.values)}")
+    print("==========================================================")
 
     final_state = graph.invoke(
         input_state,
@@ -514,4 +631,8 @@ def run_query(graph, user_query: str, context: AppContext, history: list = None)
         context=context,
     )
 
-    return final_state["final_response"]
+    return {
+        "final_response": final_state["final_response"],
+        "csv_paths": final_state.get("csv_paths") or [],
+        "chart_paths": final_state.get("chart_paths") or [],
+    }

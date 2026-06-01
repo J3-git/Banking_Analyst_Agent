@@ -1,5 +1,5 @@
 """
-Banking / Loan Analyst Assistant — Data Generation Script
+Banking / Loan Analyst Assistant - Data Generation Script
 ==========================================================
 Generates mock data and inserts into PostgreSQL.
 Matches 5-table schema: customers, employees, loans, repayments, loan_assignments
@@ -34,7 +34,7 @@ import os
 # load_dotenv(env_path)
 
 
-# CONFIG — update with your PostgreSQL credentials
+# CONFIG - update with your PostgreSQL credentials
 
 DB_CONFIG = {
     "host": os.getenv("db_host"),
@@ -51,7 +51,7 @@ NUM_EMPLOYEES = 5
 NUM_CUSTOMERS = 25
 NUM_LOANS = 50  # some customers will get multiple loans
 
-fake = Faker("en_IN")  # Indian locale — realistic names, cities
+fake = Faker("en_IN")  # Indian locale - realistic names, cities
 random.seed(100)  # reproducible results
 
 
@@ -140,7 +140,7 @@ def derive_loan_status(repayment_records):
     elif len(missed) == 1:
         return "OVERDUE"
     else:
-        # Check if all past dues are paid — could be CLOSED
+        # Check if all past dues are paid - could be CLOSED
         upcoming = [r for r in repayment_records if r["status"] == "UPCOMING"]
         if not upcoming:
             return "CLOSED"
@@ -152,10 +152,10 @@ def derive_loan_status(repayment_records):
 #     Generate a full EMI repayment history for a loan.
 
 #     Customer behavior profiles:
-#       good           (50%) — mostly on time, rare late payment
-#       occasional_late(25%) — pays but often late
-#       struggling     (15%) — mix of late, missed, partial
-#       defaulter      (10%) — multiple missed payments
+#       good           (50%) - mostly on time, rare late payment
+#       occasional_late(25%) - pays but often late
+#       struggling     (15%) - mix of late, missed, partial
+#       defaulter      (10%) - multiple missed payments
 #     """
 #     today   = date.today()
 #     profile = random.choices(
@@ -168,7 +168,7 @@ def derive_loan_status(repayment_records):
 #     for i in range(tenure_months):
 #         due_date = disbursed_date + relativedelta(months=i + 1)
 
-#         # Future EMI — not yet due
+#         # Future EMI - not yet due
 #         if due_date > today:
 #             repayments.append({
 #                 "due_date":     due_date,

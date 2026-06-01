@@ -12,6 +12,9 @@ from agent.nodes.tool_nodes import get_repayment_summary_node
 from agent.nodes.tool_nodes import get_help_node
 from agent.nodes.context_node import context_node
 from agent.nodes.followup_node import followup_node
+from agent.nodes.compare_node import compare_node, route_compare
+from agent.nodes.visualize_node import visualize_node
+from agent.nodes.merge_node import merge_node
 
 __all__ = [
     "parse_node",
@@ -26,4 +29,8 @@ __all__ = [
     "response_node",
     "context_node",
     "followup_node",
+    "compare_node",
+    "route_compare",
+    "visualize_node",
+    "merge_node",
 ]

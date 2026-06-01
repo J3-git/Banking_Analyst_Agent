@@ -4,6 +4,7 @@
 # from agent.agent_state import AgentState
 # from agent.runtime_context import AppContext
 # from agent.utils import _call_llm
+# from langchain_core.messages import AIMessage
 
 # SYSTEM_PROMPT = """
 # You are a senior banking analyst.
@@ -19,7 +20,6 @@
 # - Do not hallucinate
 # - If data is missing, explicitly say so
 # """
-
 
 # INTENT_PROMPTS = {
 #     "get_customer_profile": """
@@ -76,11 +76,6 @@
 # }
 
 
-# # -------------------------
-# # HELPERS
-# # -------------------------
-
-
 # def _safe_intent(intent):
 #     if hasattr(intent, "value"):
 #         return intent.value
@@ -88,14 +83,9 @@
 
 
 # def _extract_data(intent: str, tool_result: dict) -> str:
-#     """
-#     Normalize different tool outputs into LLM-friendly JSON.
-#     """
-
 #     if not tool_result:
 #         return "No data available."
 
-#     # OVERDUE LOANS (your new structure)
 #     if intent == "get_overdue_loans":
 #         return json.dumps(
 #             {
@@ -108,7 +98,6 @@
 #             default=str,
 #         )
 
-#     # REPAYMENT SUMMARY
 #     if intent == "get_repayment_summary":
 #         return json.dumps(
 #             {
@@ -120,7 +109,6 @@
 #             default=str,
 #         )
 
-#     # CUSTOMER PROFILE / OTHERS
 #     return json.dumps(tool_result, indent=2, default=str)
 
 
@@ -130,18 +118,14 @@
 
 
 # def summarize_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
-
-#     # CONTEXT
 #     client = runtime.context.client
 #     model_name = runtime.context.model_name
 
-#     # STATE
 #     intent = _safe_intent(state.get("intent"))
 #     tool_result = state.get("tool_result")
 #     user_query = state.get("user_query", "")
 
 #     intent_instruction = INTENT_PROMPTS.get(intent, INTENT_PROMPTS["unknown"])
-
 #     structured_data = _extract_data(intent, tool_result)
 
 #     user_prompt = f"""
@@ -163,32 +147,50 @@
 #             user_prompt=user_prompt,
 #             client=client,
 #             model_name=model_name,
-#             max_tokens=350,
+#             max_tokens=2000,
 #         )
 
-#         export_path = state.get("execution_context", {}).get("export_path")
+#         execution_context = state.get("execution_context", {})
+#         export_path = execution_context.get("export_path")
 
 #         if export_path:
 #             response += f"\n\nExport file available at: {export_path}"
 
+#         # OPTIONAL TRICK: If tool_result explicitly returns a customer_id, lock it into execution context
+#         # so next multi-turn loops remember it safely even if LLM fails param extraction.
+#         if tool_result and isinstance(tool_result, dict):
+#             for key in ["customer_id", "id", "customer_name"]:
+#                 if key in tool_result and tool_result[key]:
+#                     execution_context["current_customer_id"] = tool_result[key]
+
+#         print("==========================================================")
+#         print(f"DEBUG:in summarizer node:")
+#         print(f"DEBUG:execution_context: {execution_context}")
+#         print("==========================================================")
+
 #         return {
 #             "final_response": response,
+#             "execution_context": execution_context,
 #             "error": None,
 #         }
 
 #     except Exception as e:
+#         print("==========================================================")
+#         print(f"DEBUG:in summarizer node exception occurred:")
+#         print(f"DEBUG:error: {e}")
+#         print("==========================================================")
+
 #         return {
 #             "final_response": None,
 #             "error": f"Summarization failed: {str(e)}",
 #         }
 
+
 import json
-from openai import OpenAI
 from langgraph.runtime import Runtime
-from agent.agent_state import AgentState
+from agent.agent_state import AgentState, ExecutionContext
 from agent.runtime_context import AppContext
 from agent.utils import _call_llm
-from langchain_core.messages import AIMessage
 
 SYSTEM_PROMPT = """
 You are a senior banking analyst.
@@ -257,16 +259,29 @@ Explain system capabilities in simple language with examples.
     "unknown": """
 Explain that request is not understood and suggest using help.
 """,
+    "compare": """
+Generate a side-by-side comparison for the banking analyst.
+
+Include:
+1. Key metric differences between the two entities
+2. Which is performing better and why
+3. Risk implications
+4. Recommended action
+""",
 }
 
 
-def _safe_intent(intent):
+# HELPERS
+
+
+def _safe_intent(intent) -> str:
     if hasattr(intent, "value"):
         return intent.value
     return intent or "unknown"
 
 
 def _extract_data(intent: str, tool_result: dict) -> str:
+    """Normalize tool output into LLM-friendly JSON."""
     if not tool_result:
         return "No data available."
 
@@ -276,7 +291,7 @@ def _extract_data(intent: str, tool_result: dict) -> str:
                 "total_overdue": tool_result.get("overall", {}).get("total_overdue"),
                 "dpd_buckets": tool_result.get("dpd_buckets"),
                 "top_critical": tool_result.get("top_critical", []),
-                "export_path": tool_result.get("export_path"),
+                "csv_path": tool_result.get("csv_path"),
             },
             indent=2,
             default=str,
@@ -296,21 +311,116 @@ def _extract_data(intent: str, tool_result: dict) -> str:
     return json.dumps(tool_result, indent=2, default=str)
 
 
-# -------------------------
+def _build_execution_context(
+    state: AgentState,
+    intent: str,
+    tool_result: dict,
+    response: str,
+) -> ExecutionContext:
+    """
+    Builds a fresh ExecutionContext from the current turn.
+    Carries forward persistent entity references from the previous context.
+    Sole responsibility: summarize_node.
+    """
+
+    # carry forward persistent references from previous turn
+    prev: ExecutionContext = state.get("execution_context")
+
+    # extract entity references from tool_result
+    customer_id = None
+    customer_name = None
+    active_loan_id = None
+    active_city = None
+    active_loan_type = None
+    active_period = None
+
+    if tool_result and isinstance(tool_result, dict):
+
+        # customer profile
+        profile = tool_result.get("customer_profile")
+        if profile and isinstance(profile, dict):
+            customer_id = profile.get("customer_id")
+            customer_name = profile.get("full_name")
+
+        # repayment summary
+        if not customer_name:
+            customer_name = tool_result.get("customer_name")
+
+    # tool_params carries the filters used this turn
+    tool_params = state.get("tool_params")
+    if tool_params:
+        active_city = getattr(tool_params, "city", None)
+        active_loan_type = getattr(tool_params, "loan_type", None)
+        active_period = getattr(tool_params, "period", None)
+        active_loan_id = getattr(tool_params, "loan_id", None)
+        if not customer_id:
+            customer_id = getattr(tool_params, "customer_id", None)
+
+    # fall back to previous context for entity references not present this turn
+    if prev:
+        customer_id = customer_id or prev.current_customer_id
+        customer_name = customer_name or prev.current_customer_name
+        active_loan_id = active_loan_id or prev.active_loan_id
+        active_city = active_city or prev.active_city
+        active_loan_type = active_loan_type or prev.active_loan_type
+        active_period = active_period or prev.active_period
+
+    return ExecutionContext(
+        last_intent=intent,
+        last_params=tool_params.model_dump(exclude_none=True) if tool_params else {},
+        last_tool_result=tool_result,
+        last_response=response,
+        current_customer_id=customer_id,
+        current_customer_name=customer_name,
+        active_loan_id=active_loan_id,
+        active_city=str(active_city) if active_city else None,
+        active_loan_type=str(active_loan_type) if active_loan_type else None,
+        active_period=str(active_period) if active_period else None,
+        # compare slots carried forward -- merge_node owns them
+        compare_slot_a=prev.compare_slot_a if prev else None,
+        compare_slot_b=prev.compare_slot_b if prev else None,
+    )
+
+
 # MAIN NODE
-# -------------------------
 
 
 def summarize_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
-    client = runtime.context.client
-    model_name = runtime.context.model_name
+    """
+    Generates LLM summary from tool result and builds ExecutionContext.
+
+    Ownership rules:
+    - This node writes ONLY to: final_response, execution_context, csv_paths, error
+    - retrieved_data is NOT touched here -- owned by tool nodes
+    """
 
     intent = _safe_intent(state.get("intent"))
     tool_result = state.get("tool_result")
-    user_query = state.get("user_query", "")
+    user_query = state["enriched_query"]
 
-    intent_instruction = INTENT_PROMPTS.get(intent, INTENT_PROMPTS["unknown"])
-    structured_data = _extract_data(intent, tool_result)
+    # compare flow -- build prompt from compare slots
+    execution_context_prev = state.get("execution_context")
+    is_compare = (
+        execution_context_prev
+        and execution_context_prev.compare_slot_a
+        and execution_context_prev.compare_slot_b
+    )
+
+    if is_compare:
+        slot_a = execution_context_prev.compare_slot_a
+        slot_b = execution_context_prev.compare_slot_b
+        intent_instruction = INTENT_PROMPTS["compare"]
+        structured_data = json.dumps(
+            {
+                slot_a.label: slot_a.result,
+                slot_b.label: slot_b.result,
+            },
+            indent=2,
+            default=str,
+        )
+    else:
+        intent_instruction = INTENT_PROMPTS.get(intent, INTENT_PROMPTS["unknown"])
+        structured_data = _extract_data(intent, tool_result)
 
     user_prompt = f"""
 User Query:
@@ -329,39 +439,48 @@ Generate a clear banking analyst summary.
         response = _call_llm(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=user_prompt,
-            client=client,
-            model_name=model_name,
+            client=runtime.context.client,
+            model_name=runtime.context.model_name,
             max_tokens=2000,
         )
 
-        execution_context = state.get("execution_context", {})
-        export_path = execution_context.get("export_path")
+        # build ExecutionContext -- sole responsibility of this node
+        execution_context = _build_execution_context(
+            state=state,
+            intent=intent,
+            tool_result=tool_result,
+            response=response,
+        )
 
-        if export_path:
-            response += f"\n\nExport file available at: {export_path}"
-
-        # OPTIONAL TRICK: If tool_result explicitly returns a customer_id, lock it into execution context
-        # so next multi-turn loops remember it safely even if LLM fails param extraction.
-        if tool_result and isinstance(tool_result, dict):
-            for key in ["customer_id", "id", "customer_name"]:
-                if key in tool_result and tool_result[key]:
-                    execution_context["current_customer_id"] = tool_result[key]
+        # accumulate export paths across turns
+        csv_paths = list(state.get("csv_paths") or [])
+        tool_result_export = (
+            tool_result.get("csv_path")
+            if tool_result and isinstance(tool_result, dict)
+            else None
+        )
+        if tool_result_export and tool_result_export not in csv_paths:
+            csv_paths.append(tool_result_export)
+            response += f"\n\nExport file available at: {tool_result_export}"
 
         print("==========================================================")
-        print(f"DEBUG:in summarizer node:")
-        print(f"DEBUG:execution_context: {execution_context}")
+        print("DEBUG: in summarize_node:")
+        print(f"DEBUG: intent: {intent}")
+        print(f"DEBUG: execution_context: {execution_context.to_dict()}")
+        print(f"DEBUG: csv_paths: {csv_paths}")
         print("==========================================================")
 
         return {
             "final_response": response,
             "execution_context": execution_context,
+            "csv_paths": csv_paths,
             "error": None,
         }
 
     except Exception as e:
         print("==========================================================")
-        print(f"DEBUG:in summarizer node exception occurred:")
-        print(f"DEBUG:error: {e}")
+        print("DEBUG: in summarize_node exception occurred:")
+        print(f"DEBUG: error: {e}")
         print("==========================================================")
 
         return {

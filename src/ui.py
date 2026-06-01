@@ -116,6 +116,14 @@ from agent import DBClient
 from langgraph.runtime import Runtime
 from agent import AppContext
 
+import uuid
+
+
+def new_chat() -> str:
+    """Generate a fresh thread_id for a new conversation."""
+    return str(uuid.uuid4())
+
+
 # App container
 
 
@@ -245,7 +253,7 @@ def refresh_status():
 
 
 # chat_stream:
-def chat_stream(message, history):
+def chat_stream(message: str, history: list, thread_id: str):
     ensure_init()
 
     if app.init_error:
@@ -259,6 +267,7 @@ def chat_stream(message, history):
             user_query=message,
             context=app.app_context,
             history=history,
+            thread_id=thread_id,
         )
 
         partial = ""
@@ -272,7 +281,7 @@ def chat_stream(message, history):
 
 with gr.Blocks(
     title="Banking Loan Analyst",
-    css=""".gradio-container { height: 95vh !important; }""",
+    css=".gradio-container { height: 95vh !important; }",
 ) as demo:
 
     gr.Markdown("# Banking Loan Analyst Assistant")
@@ -281,20 +290,29 @@ with gr.Blocks(
     refresh_btn = gr.Button("Refresh Status", size="sm")
     refresh_btn.click(fn=refresh_status, outputs=status_box)
 
-    # Move gr.Chatbot outside and pass it to the chatbot parameter
-    # Set type="messages" on BOTH the Chatbot and ChatInterface for full compatibility
+    # thread_id persists across turns, resets on new chat
+    thread_state = gr.State(value=lambda: str(uuid.uuid4()))
+
+    new_chat_btn = gr.Button("New Chat", size="sm")
+
     custom_chatbot = gr.Chatbot(height=800, type="messages")
 
     gr.ChatInterface(
         fn=chat_stream,
         type="messages",
         chatbot=custom_chatbot,
+        additional_inputs=[thread_state],
         examples=[
-            "Show me the loan portfolio stats",
-            "Get customer profile for customer ID 1001",
-            "List all overdue loans",
-            "What is the collection efficiency?",
+            ["Show me the loan portfolio stats"],
+            ["Get customer profile for customer ID 1001"],
+            ["List all overdue loans"],
+            ["What is the collection efficiency?"],
         ],
+    )
+
+    new_chat_btn.click(
+        fn=new_chat,
+        outputs=thread_state,
     )
 
 

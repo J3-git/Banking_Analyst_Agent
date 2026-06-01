@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from openai import OpenAI
 
-# # HELPER — single LLM call with/without LM Format Enforcer
+# # HELPER - single LLM call with/without LM Format Enforcer
 # def _call_llm(
 #     user_prompt: str,
 #     model_name: str,
@@ -57,7 +57,7 @@ from openai import OpenAI
 #             {"role": "user", "content": user_prompt},
 #         ],
 #         max_tokens=max_tokens,  # intent is short
-#         temperature=0.0,  # deterministic — always pick most likely token
+#         temperature=0.0,  # deterministic - always pick most likely token
 #         **kwargs
 #     )
 
@@ -66,7 +66,7 @@ from openai import OpenAI
 #     return response.choices[0].message.content.strip()
 
 
-# HELPER — single LLM call with/without LM Format Enforcer
+# HELPER - single LLM call with/without LM Format Enforcer
 def _call_llm(
     user_prompt: str,
     model_name: str,

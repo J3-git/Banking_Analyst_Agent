@@ -35,37 +35,33 @@
 
 from langchain_core.messages import AIMessage
 from agent.agent_state import AgentState
-from langgraph.runtime import Runtime
-from agent.runtime_context import AppContext
 
 
-def response_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
-    response = state.get("final_response", "No response generated.")
+def response_node(state: AgentState) -> dict:
+    """
+    Appends assistant response to message history and returns final response.
 
-    # 1. Fetch current historical trace
-    messages = list(state.get("messages", []))
+    Ownership rules:
+      - This node writes ONLY to: messages, final_response
+    """
 
-    # 2. Append the assistant output to history sequence safely
-    messages.append(AIMessage(content=response))
-
-    execution_context = {
-        **state.get("execution_context", {}),
-        "last_node": "response_node",
-        "response_generated": True,
-    }
+    response = state.get("final_response") or "No response generated."
 
     print("==========================================================")
-    print(f"DEBUG:in response node:")
-    print(f"DEBUG:messages: {messages}")
-    print(f"DEBUG:execution_context: {execution_context}")
+    print("DEBUG: in response_node:")
+    print(f"DEBUG: final_response: {response}")
     print("==========================================================")
 
-    # 3. Explicitly forward 'messages' and updated 'execution_context' back to graph state
+    csv_paths = state.get("csv_paths") or []
+    chart_paths = state.get("chart_paths") or []
+
+    print(f"DEBUG: csv_paths: {csv_paths}")
+    print(f"DEBUG: chart_paths: {chart_paths}")
+
+    # add_messages reducer handles appending -- return only the new message
     return {
-        "messages": messages,
-        "execution_context": execution_context,
-        "retrieved_data": state.get("retrieved_data", {}),
-        "tool_result": state.get("tool_result"),
+        "messages": [AIMessage(content=response)],
         "final_response": response,
-        "error": state.get("error"),
+        "csv_paths": csv_paths,
+        "chart_paths": chart_paths,
     }

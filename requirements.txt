@@ -47,3 +47,4 @@ gradio>=5.0,<5.10
 huggingface_hub==0.25.1
 
 jinja2==3.1.4
+matplotlib==3.10.9

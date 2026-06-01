@@ -1,20 +1,16 @@
 from agent.utils import _serialize_value
-
 from agent.agent_state import (
     AgentState,
     CustomerProfileParams,
+    RetrievedDataEntry,
 )
-
 from langgraph.runtime import Runtime
 from agent.runtime_context import AppContext
 
-from datetime import datetime, timezone
 
-
-# Helper function only specific to 'get_customer_profile_node' tool node:
 def _compute_risk_level(max_dpd: int, loan_status: str) -> str:
     """
-    Classifies loan risk on the basis of DPD(Days Past DueDate).
+    Classifies loan risk on the basis of DPD (Days Past Due Date).
 
     DPD thresholds:
         0  - 30  days  --> LOW
@@ -26,11 +22,8 @@ def _compute_risk_level(max_dpd: int, loan_status: str) -> str:
         NPA / DEFAULTED -> always CRITICAL regardless of DPD
         OVERDUE         -> at least MEDIUM regardless of DPD
     """
-    # Status-based override:
     if loan_status in ("NPA", "DEFAULTED"):
         return "CRITICAL"
-
-    # DPD-based classification — RBI SMA buckets
     if max_dpd > 90:
         return "CRITICAL"
     elif max_dpd > 60:
@@ -43,7 +36,44 @@ def _compute_risk_level(max_dpd: int, loan_status: str) -> str:
         return "LOW"
 
 
-# Tool node to get customer_profile:
+from agent.utils import _serialize_value
+from agent.agent_state import (
+    AgentState,
+    CustomerProfileParams,
+    RetrievedDataEntry,
+)
+from langgraph.runtime import Runtime
+from agent.runtime_context import AppContext
+
+
+def _compute_risk_level(max_dpd: int, loan_status: str) -> str:
+    """
+    Classifies loan risk on the basis of DPD (Days Past Due Date).
+
+    DPD thresholds:
+        0  - 30  days  --> LOW
+        31 - 60  days  --> MEDIUM
+        61 - 90  days  --> HIGH
+        90+ days       --> CRITICAL
+
+    Loan status overrides DPD-based classification when already formally classified:
+        NPA / DEFAULTED -> always CRITICAL regardless of DPD
+        OVERDUE         -> at least MEDIUM regardless of DPD
+    """
+    if loan_status in ("NPA", "DEFAULTED"):
+        return "CRITICAL"
+    if max_dpd > 90:
+        return "CRITICAL"
+    elif max_dpd > 60:
+        return "HIGH"
+    elif max_dpd > 30:
+        return "MEDIUM"
+    elif loan_status == "OVERDUE":
+        return "MEDIUM"
+    else:
+        return "LOW"
+
+
 def get_customer_profile_node(
     state: AgentState,
     runtime: Runtime[AppContext],
@@ -54,16 +84,19 @@ def get_customer_profile_node(
       - All their loans with current status
       - Repayment summary per loan
       - Risk flag
+
+    Ownership rules:
+      - This node writes ONLY to: tool_result, tool_results, retrieved_data, error
     """
+
     params: CustomerProfileParams = state.get("tool_params")
 
     if not isinstance(params, CustomerProfileParams):
         return {
-            "tool_result": None,
-            "retrieved_data": state.get("retrieved_data", {}),
-            "execution_context": state.get("execution_context", {}),
             "error": "Missing a customer id or unable to extract it. Please mention the customer id explicitly.",
         }
+
+    cache_key = f"customer_profile:{params.customer_id}"
 
     try:
         db_client = runtime.context.db
@@ -71,7 +104,7 @@ def get_customer_profile_node(
         with db_client.conn() as conn:
             with db_client.cursor(conn, dict_cursor=True) as cur:
 
-                # Customer basic info:
+                # customer basic info
                 cur.execute(
                     """
                     SELECT
@@ -89,11 +122,13 @@ def get_customer_profile_node(
                         created_at
                     FROM customers
                     WHERE customer_id = %s
-                """,
+                    """,
                     (params.customer_id,),
-                )  # The trailing comma in (params.customer_id,) makes it a tuple — required by psycopg2 even for a single value.
+                )
 
                 customer = cur.fetchone()
+
+                # customer not found
                 if not customer:
                     result = {
                         "customer_profile": None,
@@ -102,31 +137,27 @@ def get_customer_profile_node(
                         "message": f"Customer {params.customer_id} not found",
                     }
 
-                    # update context
-                    execution_context = {
-                        **state.get("execution_context", {}),
-                        "last_tool": "get_customer_profile",
-                        "last_result_empty": True,
-                    }
-
-                    cache_key = f"customer_profile:{params.customer_id}"
+                    entry = RetrievedDataEntry(
+                        intent="get_customer_profile",
+                        params=params.model_dump(exclude_none=True),
+                        result=result,
+                    )
 
                     retrieved_data = {
                         **state.get("retrieved_data", {}),
-                        cache_key: result,
-                        "fetched_at": datetime.now(timezone.utc).isoformat(),
+                        cache_key: entry.model_dump(),
                     }
 
                     return {
                         "tool_result": result,
+                        "tool_results": [result],
                         "retrieved_data": retrieved_data,
-                        "execution_context": execution_context,
                         "error": None,
                     }
 
                 customer = {k: _serialize_value(v) for k, v in customer.items()}
 
-                # All loans for this customer:
+                # all loans for this customer
                 cur.execute(
                     """
                     SELECT
@@ -155,69 +186,61 @@ def get_customer_profile_node(
                     (params.customer_id,),
                 )
 
-                loans = []
+                # risk level - customer is as risky as their worst loan
                 risk_levels = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
                 final_risk = "LOW"
-
-                # Insight — risk level
-                # Considering worst risk level across all loans for this customer
-                # i.e. A customer is as risky as their worst loan.
+                loans = []
 
                 for row in cur.fetchall():
                     loan = {k: _serialize_value(v) for k, v in row.items()}
-
                     level = _compute_risk_level(
                         max_dpd=loan.get("max_dpd") or 0,
                         loan_status=loan["status"],
                     )
-
-                    loan["risk_level"] = (
-                        level  # annotate each loan with its own risk level
-                    )
-
+                    loan["risk_level"] = level
                     loans.append(loan)
 
                     if risk_levels[level] > risk_levels[final_risk]:
-                        final_risk = level  # escalate customer risk to worst loan"
+                        final_risk = level
 
-        # FINAL RESULT
         result = {
             "customer_profile": customer,
             "loan_summaries": loans,
             "portfolio_risk_level": final_risk,
         }
 
-        # UPDATE EXECUTION CONTEXT
-        execution_context = {
-            **state.get("execution_context", {}),
-            "last_tool": "get_customer_profile",
-            "current_customer_id": params.customer_id,
-            "current_customer_name": customer.get("full_name"),
-            "portfolio_risk_level": final_risk,
-            "loan_count": len(loans),  # also applying the earlier fix here
-        }
-
-        # UPDATE RETRIEVED DATA CACHE
-        cache_key = f"customer_profile:" f"{params.customer_id}"
+        entry = RetrievedDataEntry(
+            intent="get_customer_profile",
+            params=params.model_dump(exclude_none=True),
+            result=result,
+        )
 
         retrieved_data = {
             **state.get("retrieved_data", {}),
-            cache_key: result,
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            cache_key: entry.model_dump(),
         }
 
-        # RETURN PARTIAL STATE UPDATE
+        print("==========================================================")
+        print("DEBUG: in get_customer_profile_node:")
+        print(f"DEBUG: cache_key: {cache_key}")
+        print(f"DEBUG: customer: {customer.get('full_name')}")
+        print(f"DEBUG: portfolio_risk_level: {final_risk}")
+        print(f"DEBUG: loan_count: {len(loans)}")
+        print("==========================================================")
+
         return {
             "tool_result": result,
+            "tool_results": [result],
             "retrieved_data": retrieved_data,
-            "execution_context": execution_context,
             "error": None,
         }
 
     except Exception as e:
+        print("==========================================================")
+        print("DEBUG: in get_customer_profile_node exception occurred:")
+        print(f"DEBUG: error: {e}")
+        print("==========================================================")
+
         return {
-            "tool_result": None,
-            "retrieved_data": state.get("retrieved_data", {}),
-            "execution_context": state.get("execution_context", {}),
             "error": f"get_customer_profile failed: {str(e)}",
         }
