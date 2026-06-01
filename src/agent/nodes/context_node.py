@@ -168,7 +168,21 @@ def context_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
 
     conversation_history = _serialize_messages(messages)
     execution_context: ExecutionContext = state.get("execution_context")
-    execution_context_dict = execution_context.to_dict() if execution_context else {}
+    if execution_context:
+        raw = execution_context.to_dict()
+        execution_context_dict = {
+            k: v
+            for k, v in raw.items()
+            if k
+            not in (
+                "last_tool_result",
+                "last_response",
+                "compare_slot_a",
+                "compare_slot_b",
+            )
+        }
+    else:
+        execution_context_dict = {}
 
     prompt = f"""You are a context resolver for a banking loan analyst agent.
 

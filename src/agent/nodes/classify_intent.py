@@ -237,9 +237,23 @@ def parse_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
 
         # execution_context is an ExecutionContext BaseModel - serialize for LLM prompt
         execution_context = state.get("execution_context")
-        execution_context_dict = (
-            execution_context.to_dict() if execution_context else {}
-        )
+        if execution_context:
+            # strip heavy fields — last_tool_result and last_response are too large
+            # for intent classification and param extraction
+            raw = execution_context.to_dict()
+            execution_context_dict = {
+                k: v
+                for k, v in raw.items()
+                if k
+                not in (
+                    "last_tool_result",
+                    "last_response",
+                    "compare_slot_a",
+                    "compare_slot_b",
+                )
+            }
+        else:
+            execution_context_dict = {}
 
         print("==========================================================")
         print("DEBUG: in parse_node:")

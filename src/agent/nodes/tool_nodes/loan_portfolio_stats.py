@@ -41,7 +41,7 @@ def get_loan_portfolio_stats_node(
     # resolve group_by early - needed for cache_key in both empty and success paths
     group_col = (
         params.group_by.value
-        if params.group_by.value in ALLOWED_GROUP_EXPRESSIONS
+        if params.group_by and params.group_by.value in ALLOWED_GROUP_EXPRESSIONS
         else "loan_type"
     )
 
@@ -82,10 +82,10 @@ def get_loan_portfolio_stats_node(
                     AND (%s IS NULL OR l.loan_type = %s)
                     """,
                     (
-                        params.city.value,
-                        params.city.value,
-                        params.loan_type.value,
-                        params.loan_type.value,
+                        params.city.value if params.city else None,
+                        params.city.value if params.city else None,
+                        params.loan_type.value if params.loan_type else None,
+                        params.loan_type.value if params.loan_type else None,
                     ),
                 )
 
@@ -148,10 +148,10 @@ def get_loan_portfolio_stats_node(
                     ORDER BY default_rate_pct DESC NULLS LAST
                     """,
                     (
-                        params.city.value,
-                        params.city.value,
-                        params.loan_type.value,
-                        params.loan_type.value,
+                        params.city.value if params.city else None,
+                        params.city.value if params.city else None,
+                        params.loan_type.value if params.loan_type else None,
+                        params.loan_type.value if params.loan_type else None,
                     ),
                 )
 

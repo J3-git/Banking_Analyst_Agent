@@ -393,6 +393,7 @@ from agent.nodes.merge_node import merge_node
 from agent.nodes.visualize_node import visualize_node
 
 from langgraph.checkpoint.memory import InMemorySaver
+import os
 
 # ROUTING FUNCTIONS
 
@@ -587,6 +588,16 @@ def build_graph() -> StateGraph:
     graph.add_edge("summarize", "response")
     graph.add_edge("handle_error", "response")
     graph.add_edge("response", END)
+
+    # graph = graph.compile(checkpointer=checkpointer)
+    # # To create flowchart image
+    # os.makedirs("./exports", exist_ok=True)
+    # graph_visual = graph.get_graph()
+    # graph_visual_png = graph_visual.draw_mermaid_png()
+    # with open("./exports/graph.png", "wb") as f:
+    #     f.write(graph_visual_png)
+    # print("Graph image saved in exports directory.")
+    # return graph
 
     return graph.compile(checkpointer=checkpointer)
 

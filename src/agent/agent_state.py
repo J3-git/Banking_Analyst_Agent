@@ -234,6 +234,16 @@ def _merge_dicts(left: dict, right: dict) -> dict:
     return {**left, **right}
 
 
+def _reset_or_append(left: list, right: list) -> list:
+    """
+    Resets when right is empty list (turn start via create_initial_state).
+    Appends when right is non-empty (parallel Send branches within same turn).
+    """
+    if not right:
+        return []
+    return left + right
+
+
 # ENUMS
 
 
@@ -407,9 +417,7 @@ class AgentState(TypedDict):
     # tool execution outputs (written ONLY by tool nodes)
     # tool_results is a list to support compare (two results in one turn)
     tool_result: Annotated[Optional[Any], _keep_last]  # single result - standard flow
-    tool_results: Annotated[
-        list[Any], operator.add
-    ]  # multi-result - compare flow, reducer appends
+    tool_results: Annotated[list[Any], _reset_or_append]  # multi-result — compare flow
 
     # retrieved data cache
     # key: "intent:param1_val:param2_val:..."
