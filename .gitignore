@@ -18,3 +18,7 @@ models/
 # Environment variables (if you add .env later)
 .env.app
 .env.server
+
+#export
+*.csv
+charts/

@@ -28,7 +28,7 @@ def main():
         "password": os.getenv("db_password"),
     }
 
-    VLLM_URL = os.getenv("VLLM_URL")
+    LLM_URL = os.getenv("LLM_URL")
     MODEL_NAME = os.getenv("model_name")
 
     # Initialise connection pool
@@ -44,7 +44,7 @@ def main():
     # Initialise LLM client
     try:
         print(f"Connecting to vLLM...")
-        llm_client = OpenAI(base_url=VLLM_URL, api_key=os.getenv("VLLM_API_KEY"))
+        llm_client = OpenAI(base_url=LLM_URL, api_key=os.getenv("LLM_API_KEY"))
         print(f"LLM client ready -- model: {MODEL_NAME}")
 
     except Exception as e:
