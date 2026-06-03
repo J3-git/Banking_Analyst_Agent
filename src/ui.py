@@ -312,7 +312,7 @@ def run_agent_stream(
         result = run_query(
             graph=app.graph,
             user_query=user_query,
-            context=app.app_context,
+            app_context=app.app_context,
             history=history,
             thread_id=thread_id,
         )
@@ -381,7 +381,7 @@ def bot_response(history, thread_id):
         result = run_query(
             graph=app.graph,
             user_query=user_query,
-            context=app.app_context,
+            app_context=app.app_context,
             history=history[:-1],
             thread_id=thread_id,
         )

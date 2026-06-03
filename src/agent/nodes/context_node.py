@@ -143,6 +143,9 @@ from agent.agent_state import AgentState, ExecutionContext, FollowUpType
 from agent.utils import _call_llm, _serialize_messages
 import json
 
+# for debugging
+import inspect
+
 
 class ContextOutput(BaseModel):
     enriched_query: str
@@ -155,10 +158,22 @@ class ContextOutput(BaseModel):
 
 
 def context_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
+
+    # Debug start
+    frame = inspect.currentframe()
+    print("===========================================================")
+    print(f"DEBUG: Entered function: {frame.f_code.co_name}")
+    # Debug end
+
     messages = list(state.get("messages", []))
 
     # No history -- fresh query, nothing to enrich
     if not messages:
+        # Debug start
+        print(f"DEBUG context_node: fresh query")
+        print(f"DEBUG context_node: returning default values")
+        print("===========================================================")
+        # Debug end
         return {
             "enriched_query": state["user_query"],
             "needs_db": True,
@@ -332,6 +347,8 @@ OUTPUT -- JSON only, no explanation
 """
 
     try:
+        print("DEBUG context_node: calling _call_llm")
+
         output = _call_llm(
             user_prompt=prompt,
             model_class=ContextOutput,
@@ -340,15 +357,14 @@ OUTPUT -- JSON only, no explanation
             max_tokens=300,
         )
 
-        print("==========================================================")
-        print("DEBUG: in context_node:")
-        print(f"DEBUG: conversation_history: {conversation_history}")
-        print(f"DEBUG: execution_context: {execution_context_dict}")
-        print(f"DEBUG: enriched_query: {output.enriched_query}")
-        print(f"DEBUG: needs_db: {output.needs_db}")
-        print(f"DEBUG: is_followup: {output.is_followup}")
-        print(f"DEBUG: follow_up_type: {output.follow_up_type}")
-        print(f"DEBUG: reasoning: {output.reasoning}")
+        print("DEBUG context_node: returning back from _call_llm):")
+        print(f"DEBUG context_node: conversation_history: {conversation_history}")
+        print(f"DEBUG context_node: execution_context: {execution_context_dict}")
+        print(f"DEBUG context_node: enriched_query: {output.enriched_query}")
+        print(f"DEBUG context_node: needs_db: {output.needs_db}")
+        print(f"DEBUG context_node: is_followup: {output.is_followup}")
+        print(f"DEBUG context_node: follow_up_type: {output.follow_up_type}")
+        print(f"DEBUG context_node: reasoning: {output.reasoning}")
         print("==========================================================")
 
         # map string to FollowUpType enum, None if "none" or unrecognised
@@ -369,9 +385,9 @@ OUTPUT -- JSON only, no explanation
         }
 
     except Exception as e:
-        print("==========================================================")
-        print("DEBUG: in context_node exception occurred:")
-        print(f"DEBUG: error: {e}")
+        print("DEBUG context_node: in context_node exception occurred:")
+        print(f"DEBUG context_node: error: {e}")
+        print(f"DEBUG context_node: returning default values")
         print("==========================================================")
 
         return {

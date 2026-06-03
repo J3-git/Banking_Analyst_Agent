@@ -608,7 +608,7 @@ def build_graph() -> StateGraph:
 def run_query(
     graph,
     user_query: str,
-    context: AppContext,
+    app_context: AppContext,
     thread_id: str,
     history: list = None,
 ) -> str:
@@ -639,7 +639,7 @@ def run_query(
     final_state = graph.invoke(
         input_state,
         config,
-        context=context,
+        context=app_context,
     )
 
     return {

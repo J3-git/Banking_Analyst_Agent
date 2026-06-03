@@ -36,6 +36,9 @@
 from langchain_core.messages import AIMessage
 from agent.agent_state import AgentState
 
+# for debug
+import inspect
+
 
 def response_node(state: AgentState) -> dict:
     """
@@ -44,19 +47,22 @@ def response_node(state: AgentState) -> dict:
     Ownership rules:
       - This node writes ONLY to: messages, final_response
     """
+    # Debug start
+    frame = inspect.currentframe()
+    print("==============================================================")
+    print(f"DEBUG: Entered function: {frame.f_code.co_name}")
+    # Debug end
 
     response = state.get("final_response") or "No response generated."
 
-    print("==========================================================")
-    print("DEBUG: in response_node:")
-    print(f"DEBUG: final_response: {response}")
-    print("==========================================================")
+    print(f"DEBUG response_node: final_response: {response}")
 
     csv_paths = state.get("csv_paths") or []
     chart_paths = state.get("chart_paths") or []
 
-    print(f"DEBUG: csv_paths: {csv_paths}")
-    print(f"DEBUG: chart_paths: {chart_paths}")
+    print(f"DEBUG response_node: csv_paths: {csv_paths}")
+    print(f"DEBUG response_node: chart_paths: {chart_paths}")
+    print("==========================================================")
 
     # add_messages reducer handles appending -- return only the new message
     return {

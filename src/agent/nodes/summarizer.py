@@ -271,6 +271,9 @@ Include:
 }
 
 
+# for debugging
+import inspect
+
 # HELPERS
 
 
@@ -282,11 +285,25 @@ def _safe_intent(intent) -> str:
 
 def _extract_data(intent: str, tool_result: dict) -> str:
     """Normalize tool output into LLM-friendly JSON."""
+
+    # Debug start
+    frame = inspect.currentframe()
+    print("---------------------------------------------------------------")
+    print(f"DEBUG: Entered function: {frame.f_code.co_name}")
+
+    caller_frame = frame.f_back
+    caller_function = caller_frame.f_code.co_name if caller_frame else "<module>"
+    print(f"DEBUG _extract_data: Called from: {caller_function}")
+    # Debug end
+
     if not tool_result:
+        print(f"DEBUG _extract_data: tool result unavailable.")
+        print(f"DEBUG _extract_data: returning default string")
+        print("---------------------------------------------------------------")
         return "No data available."
 
     if intent == "get_overdue_loans":
-        return json.dumps(
+        extract_data_overdue_loans = json.dumps(
             {
                 "total_overdue": tool_result.get("overall", {}).get("total_overdue"),
                 "dpd_buckets": tool_result.get("dpd_buckets"),
@@ -296,9 +313,13 @@ def _extract_data(intent: str, tool_result: dict) -> str:
             indent=2,
             default=str,
         )
+        print(f"DEBUG _extract_data: intent is get_overdue_loans")
+        print(f"DEBUG _extract_data: return : {extract_data_overdue_loans}")
+        print("---------------------------------------------------------------")
+        return extract_data_overdue_loans
 
     if intent == "get_repayment_summary":
-        return json.dumps(
+        extract_data_repayment_summary = json.dumps(
             {
                 "customer_name": tool_result.get("customer_name"),
                 "summary": tool_result.get("summary"),
@@ -308,6 +329,15 @@ def _extract_data(intent: str, tool_result: dict) -> str:
             default=str,
         )
 
+        print(f"DEBUG _extract_data: intent is repayment_summary")
+        print(f"DEBUG _extract_data: return : {extract_data_repayment_summary}")
+        print("---------------------------------------------------------------")
+        return extract_data_repayment_summary
+
+    print(
+        f"DEBUG _extract_data: return : {json.dumps(tool_result, indent=2, default=str)}"
+    )
+    print("---------------------------------------------------------------")
     return json.dumps(tool_result, indent=2, default=str)
 
 
@@ -323,8 +353,18 @@ def _build_execution_context(
     Sole responsibility: summarize_node.
     """
 
+    # Debug start
+    frame = inspect.currentframe()
+    print("---------------------------------------------------------------")
+    print(f"DEBUG: Entered function: {frame.f_code.co_name}")
+
+    caller_frame = frame.f_back
+    caller_function = caller_frame.f_code.co_name if caller_frame else "<module>"
+    print(f"DEBUG _build_execution_context: Called from: {caller_function}")
+    # Debug end
+
     # carry forward persistent references from previous turn
-    prev: ExecutionContext = state.get("execution_context")
+    prev_context: ExecutionContext = state.get("execution_context")
 
     # extract entity references from tool_result
     customer_id = None
@@ -357,15 +397,15 @@ def _build_execution_context(
             customer_id = getattr(tool_params, "customer_id", None)
 
     # fall back to previous context for entity references not present this turn
-    if prev:
-        customer_id = customer_id or prev.current_customer_id
-        customer_name = customer_name or prev.current_customer_name
-        active_loan_id = active_loan_id or prev.active_loan_id
-        active_city = active_city or prev.active_city
-        active_loan_type = active_loan_type or prev.active_loan_type
-        active_period = active_period or prev.active_period
+    if prev_context:
+        customer_id = customer_id or prev_context.current_customer_id
+        customer_name = customer_name or prev_context.current_customer_name
+        active_loan_id = active_loan_id or prev_context.active_loan_id
+        active_city = active_city or prev_context.active_city
+        active_loan_type = active_loan_type or prev_context.active_loan_type
+        active_period = active_period or prev_context.active_period
 
-    return ExecutionContext(
+    current_context = ExecutionContext(
         last_intent=intent,
         last_params=tool_params.model_dump(exclude_none=True) if tool_params else {},
         last_tool_result=tool_result,
@@ -377,9 +417,16 @@ def _build_execution_context(
         active_loan_type=str(active_loan_type) if active_loan_type else None,
         active_period=str(active_period) if active_period else None,
         # compare slots carried forward -- merge_node owns them
-        compare_slot_a=prev.compare_slot_a if prev else None,
-        compare_slot_b=prev.compare_slot_b if prev else None,
+        compare_slot_a=prev_context.compare_slot_a if prev_context else None,
+        compare_slot_b=prev_context.compare_slot_b if prev_context else None,
     )
+
+    print(
+        f"DEBUG: _build_execution_context: built execution context: {current_context}"
+    )
+    print("---------------------------------------------------------------")
+
+    return current_context
 
 
 # MAIN NODE
@@ -393,6 +440,12 @@ def summarize_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
     - This node writes ONLY to: final_response, execution_context, csv_paths, error
     - retrieved_data is NOT touched here -- owned by tool nodes
     """
+
+    # Debug start
+    frame = inspect.currentframe()
+    print("==============================================================")
+    print(f"DEBUG: Entered function: {frame.f_code.co_name}")
+    # Debug end
 
     intent = _safe_intent(state.get("intent"))
     tool_result = state.get("tool_result")
@@ -420,7 +473,9 @@ def summarize_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
         )
     else:
         intent_instruction = INTENT_PROMPTS.get(intent, INTENT_PROMPTS["unknown"])
+        print(f"DEBUG summarize_node: calling _extract_data")
         structured_data = _extract_data(intent, tool_result)
+        print(f"DEBUG summarize_node: returned back from _extract_data")
 
     user_prompt = f"""
 User Query:
@@ -436,13 +491,18 @@ Generate a clear banking analyst summary.
 """
 
     try:
+        print(f"DEBUG summarize_node: calling _call_llm")
+
         response = _call_llm(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=user_prompt,
             client=runtime.context.client,
             model_name=runtime.context.model_name,
-            max_tokens=2000,
+            max_tokens=5000,
         )
+
+        print(f"DEBUG summarize_node: returned back from _call_llm")
+        print(f"DEBUG summarize_node: calling _build_execution_context")
 
         # build ExecutionContext -- sole responsibility of this node
         execution_context = _build_execution_context(
@@ -451,6 +511,8 @@ Generate a clear banking analyst summary.
             tool_result=tool_result,
             response=response,
         )
+
+        print(f"DEBUG summarize_node: returned back from _build_execution_context")
 
         # accumulate export paths across turns
         csv_paths = list(state.get("csv_paths") or [])
@@ -463,11 +525,10 @@ Generate a clear banking analyst summary.
             csv_paths.append(tool_result_export)
             response += f"\n\nExport file available at: {tool_result_export}"
 
-        print("==========================================================")
-        print("DEBUG: in summarize_node:")
-        print(f"DEBUG: intent: {intent}")
-        print(f"DEBUG: execution_context: {execution_context.to_dict()}")
-        print(f"DEBUG: csv_paths: {csv_paths}")
+        print(f"DEBUG summarize_node: intent: {intent}")
+        print(f"DEBUG summarize_node: final_response: {response}")
+        print(f"DEBUG summarize_node: execution_context: {execution_context.to_dict()}")
+        print(f"DEBUG summarize_node: csv_paths: {csv_paths}")
         print("==========================================================")
 
         return {
@@ -478,9 +539,9 @@ Generate a clear banking analyst summary.
         }
 
     except Exception as e:
-        print("==========================================================")
-        print("DEBUG: in summarize_node exception occurred:")
-        print(f"DEBUG: error: {e}")
+        print("DEBUG summarize_node: in summarize_node exception occurred:")
+        print(f"DEBUG summarize_node: error: {e}")
+        print(f"DEBUG summarize_node: returning default values")
         print("==========================================================")
 
         return {

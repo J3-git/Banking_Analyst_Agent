@@ -31,9 +31,9 @@ def get_collection_efficiency_node(
 
     cache_key = (
         f"collection_efficiency:"
-        f"{params.city.value if params.city else 'all'}:"
-        f"{params.loan_type.value if params.loan_type else 'all'}:"
-        f"{params.period.value if params.period else 'full'}"
+        f"{params.city if params.city else 'City.all'}:"
+        f"{params.loan_type if params.loan_type else 'LoanType.all'}:"
+        f"{params.period if params.period else 'Period.full'}"
     )
 
     try:

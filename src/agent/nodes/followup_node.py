@@ -4,6 +4,9 @@ from agent.agent_state import AgentState, ExecutionContext
 from agent.runtime_context import AppContext
 from agent.utils import _call_llm, _serialize_messages
 
+# for debug
+import inspect
+
 
 def followup_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
     """
@@ -13,6 +16,13 @@ def followup_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
     Ownership rules:
     - This node writes ONLY to: final_response, error
     """
+
+    # Debug start
+    frame = inspect.currentframe()
+    print("==============================================================")
+    print(f"DEBUG: Entered function: {frame.f_code.co_name}")
+    # Debug end
+
     try:
         messages = list(state.get("messages", []))
         conversation_history = _serialize_messages(messages)
@@ -39,6 +49,7 @@ User question: {query}
 
 Respond in plain text. Be concise and action-oriented.
 """
+        print(f"DEBUG followup_node: calling _call_llm")
 
         response = _call_llm(
             user_prompt=prompt,
@@ -46,11 +57,10 @@ Respond in plain text. Be concise and action-oriented.
             client=runtime.context.client,
         )
 
-        print("==========================================================")
-        print("DEBUG: in followup_node:")
-        print(f"DEBUG: query: {query}")
-        print(f"DEBUG: execution_context: {execution_context_dict}")
-        print(f"DEBUG: response: {response}")
+        print(f"DEBUG followup_node: returned back from _call_llm")
+        print(f"DEBUG followup_node: query: {query}")
+        print(f"DEBUG followup_node: execution_context: {execution_context_dict}")
+        print(f"DEBUG followup_node: response: {response}")
         print("==========================================================")
 
         return {
@@ -59,9 +69,9 @@ Respond in plain text. Be concise and action-oriented.
         }
 
     except Exception as e:
-        print("==========================================================")
-        print("DEBUG: in followup_node exception occurred:")
-        print(f"DEBUG: error: {e}")
+        print("DEBUG followup_node: in followup_node exception occurred:")
+        print(f"DEBUG followup_node: error: {e}")
+        print(f"DEBUG followup_node: returning default values")
         print("==========================================================")
 
         return {

@@ -4,6 +4,9 @@ from agent.runtime_context import AppContext
 from agent.agent_state import AgentState, OverdueLoansParams, RetrievedDataEntry
 from agent.utils import export_csv, _serialize_value
 
+# for debuging
+import inspect
+
 
 def get_overdue_loans_node(
     state: AgentState,
@@ -23,9 +26,18 @@ def get_overdue_loans_node(
     - execution_context is NOT touched here - owned by summarize_node / merge_node
     """
 
+    # Debug start
+    frame = inspect.currentframe()
+    print("===========================================================")
+    print(f"DEBUG: Entered function: {frame.f_code.co_name}")
+
+    # Debug end
+
     params: OverdueLoansParams = state.get("tool_params")
 
     if not isinstance(params, OverdueLoansParams):
+        print("Debug overdue_loans: parameters issue, returning error")
+        print("===========================================================")
         return {
             "error": "Required parameters to retrieve overdue loans are either missing, invalid or could not be extracted.",
         }
@@ -33,8 +45,8 @@ def get_overdue_loans_node(
     # cache key - deterministic, param-scoped
     cache_key = (
         f"overdue_loans:"
-        f"{params.city.value if params.city else 'all'}:"
-        f"{params.loan_type.value if params.loan_type else 'all'}:"
+        f"{params.city if params.city else 'City.all'}:"
+        f"{params.loan_type if params.loan_type else 'LoanType.all'}:"
         f"{params.min_days_overdue or 1}"
     )
 
@@ -126,6 +138,14 @@ def get_overdue_loans_node(
                 cache_key: entry.model_dump(),
             }
 
+            print("DEBUG overdue_loans: empty result handling")
+            print(f"DEBUG overdue_loans: cache_key: {cache_key}")
+            print(f"DEBUG overdue_loans: result overall: {result['overall']}")
+            print(
+                f"DEBUG overdue_loans: total_overdue: {result['overall']['total_overdue']}"
+            )
+            print("==========================================================")
+
             return {
                 "tool_result": result,
                 "tool_results": [result],
@@ -162,7 +182,7 @@ def get_overdue_loans_node(
                 "serious_61_to_90_days": len(buckets["61_to_90"]),
                 "critical_above_90_days": len(buckets["above_90"]),
             },
-            "top_critical": loans[:10],
+            "top_critical": loans[:3],
             "csv_path": export_path,
             "dataset_id": dataset_id,
         }
@@ -180,11 +200,12 @@ def get_overdue_loans_node(
             cache_key: entry.model_dump(),
         }
 
-        print("==========================================================")
-        print("DEBUG: in get_overdue_loans_node:")
-        print(f"DEBUG: cache_key: {cache_key}")
-        print(f"DEBUG: result overall: {result['overall']}")
-        print(f"DEBUG: total_overdue: {result['overall']['total_overdue']}")
+        print("DEBUG overdue_loans: overdue loans present.")
+        print(f"DEBUG overdue_loans: cache_key: {cache_key}")
+        print(f"DEBUG overdue_loans: result overall: {result['overall']}")
+        print(
+            f"DEBUG overdue_loans: total_overdue: {result['overall']['total_overdue']}"
+        )
         print("==========================================================")
 
         return {
@@ -195,9 +216,9 @@ def get_overdue_loans_node(
         }
 
     except Exception as e:
-        print("==========================================================")
-        print("DEBUG: in get_overdue_loans_node exception occurred:")
-        print(f"DEBUG: error: {e}")
+        print("DEBUG overdue_loans: in get_overdue_loans_node exception occurred:")
+        print(f"DEBUG overdue_loans: error: {e}")
+        print("Debug overdue_loans: returning error")
         print("==========================================================")
 
         return {

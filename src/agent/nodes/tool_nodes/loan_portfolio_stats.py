@@ -47,9 +47,9 @@ def get_loan_portfolio_stats_node(
 
     cache_key = (
         f"portfolio_stats:"
-        f"{group_col}:"
-        f"{params.city.value if params.city else 'all'}:"
-        f"{params.loan_type.value if params.loan_type else 'all'}"
+        f"GroupBy.{group_col}:"
+        f"{params.city if params.city else 'City.all'}:"
+        f"{params.loan_type if params.loan_type else 'LoanType.all'}"
     )
 
     try:
