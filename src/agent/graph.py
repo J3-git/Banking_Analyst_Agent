@@ -386,6 +386,7 @@ from agent.nodes.tool_nodes import (
     get_loan_portfolio_stats_node,
     get_collection_efficiency_node,
     get_help_node,
+    retrieve_policy_node,
 )
 
 from agent.nodes.compare_node import compare_node, route_compare
@@ -432,6 +433,7 @@ def route_after_parse(state: AgentState) -> str:
 
     intent = state.get("intent", Intent.UNKNOWN)
     routing_map = {
+        Intent.GET_POLICY_INFO: "retrieve_policy",
         Intent.GET_CUSTOMER_PROFILE: "get_customer_profile",
         Intent.GET_OVERDUE_LOANS: "get_overdue_loans",
         Intent.GET_REPAYMENT_SUMMARY: "get_repayment_summary",
@@ -495,6 +497,7 @@ def build_graph() -> StateGraph:
     graph.add_node("get_collection_efficiency", get_collection_efficiency_node)
     graph.add_node("get_help", get_help_node)
     graph.add_node("summarize", summarize_node)
+    graph.add_node("retrieve_policy", retrieve_policy_node)
     graph.add_node("response", response_node)
     graph.add_node("handle_error", handle_error_node)
 
@@ -540,6 +543,7 @@ def build_graph() -> StateGraph:
             "get_repayment_summary": "get_repayment_summary",
             "get_loan_portfolio_stats": "get_loan_portfolio_stats",
             "get_collection_efficiency": "get_collection_efficiency",
+            "retrieve_policy": "retrieve_policy",
             "get_help": "get_help",
             "handle_error": "handle_error",
         },
@@ -587,6 +591,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("get_help", "response")
     graph.add_edge("summarize", "response")
     graph.add_edge("handle_error", "response")
+    graph.add_edge("retrieve_policy", "response")
     graph.add_edge("response", END)
 
     # graph = graph.compile(checkpointer=checkpointer)

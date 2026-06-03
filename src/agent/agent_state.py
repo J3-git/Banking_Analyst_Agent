@@ -253,6 +253,7 @@ class Intent(str, Enum):
     GET_REPAYMENT_SUMMARY = "get_repayment_summary"
     GET_LOAN_PORTFOLIO_STATS = "get_loan_portfolio_stats"
     GET_COLLECTION_EFFICIENCY = "get_collection_efficiency"
+    GET_POLICY_INFO = "get_policy_info"
     GET_HELP = "get_help"
     UNKNOWN = "unknown"
 

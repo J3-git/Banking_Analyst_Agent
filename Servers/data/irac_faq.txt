@@ -1,0 +1,47 @@
+1. Whether a working capital account will become an NPA if the stock statements are not submitted regularly? What should be the period for which the stock statements can be in arrears before the account is treated as an NPA?
+
+Banks should ensure that drawings in the working capital accounts are covered by the adequacy of current assets, since current assets are first appropriated in times of distress. Considering the practical difficulties of large borrowers, stock statements relied upon by the banks for determining drawing power should not be older than three months. The outstanding in the account based on drawing power calculated from stock statements older than three months would be deemed as irregular. A working capital borrowal account will become NPA if such irregular drawings are permitted in the account for a continuous period of 90 days (with effect from March 31, 2004).
+
+2. Whether an account will become an NPA if the review / renewal of regular / ad-hoc credit limits are not done when due? What should be periodicity of review / renewal to decide the present status of an account?
+
+Regular and ad-hoc credit limits need to be reviewed / regularised not later than three months from the due date / date of ad-hoc sanction. In case of constraints such as non-availability of financial statements and other data from the borrowers, the branch should furnish evidence to show that renewal / review of credit limits is already on and would be completed soon. In any case, delay beyond six months is not considered desirable as a general discipline. Hence, an account where the regular / ad-hoc credit limits have not been reviewed or have not been renewed within 180 days from the due date / date of ad-hoc sanction will be treated as NPA, which period will be reduced to 90 days with effect from March 31, 2004.
+
+3. Regularisation of the account around the date of balance sheet - Whether it will be in order to treat a borrowal account as 'standard', if it has been irregular for a major part of the year, but has been regularised near the balance sheet date?
+
+The asset classification of borrowal accounts where a solitary or a few credits are recorded before the balance sheet date should be handled with care and without scope for subjectivity. Where the account indicates inherent weakness on the basis of the data available, the account should be deemed as a NPA. In other genuine cases, the banks must furnish satisfactory evidence to the Statutory Auditors / Inspecting Officers about the manner of regularisation of the account to eliminate doubts on their performing status.
+
+4. Classification of NPAs where there is a threat to recovery
+
+How should the instructions on classification of NPAs straightaway as doubtful or a loss asset be interpreted and what can be termed as a 'significant credit impairment'?
+
+An NPA need not go through the various stages of classification in case of serious credit impairment and such assets should be straightway classified as a doubtful / loss asset as appropriate. Erosion in the value of security can be reckoned as significant when the realizable value of the security is less than 50 per cent of the value assessed by the bank or accepted by RBI at the time of last inspection, as the case may be. Such NPAs may be straightaway classified under doubtful category and provisioning should be made as applicable to doubtful assets.
+
+5. Classification of credit facilities under consortium
+
+In certain cases of consortium accounts, though the record of recovery in the account with a member bank may suggest that the account is a NPA, the banks submit that, at times, the borrower has deposited adequate funds with the consortium leader / member of the consortium and the bank's share is due for receipt. In such cases, will it be in order for the member bank to classify the account as 'standard' in its books?
+
+Asset classification of accounts under consortium should be based on the record of recovery of the individual member banks and other aspects having a bearing on the recoverability of the advances. Where the remittances by the borrower under consortium lending arrangements are pooled with one bank and / or where the bank receiving remittances is not parting with the share of other member banks, the account will be treated as not serviced in the books of the other member banks, and therefore, be treated as NPA. The banks participating in the consortium should, therefore, arrange to get their share of recovery transferred from the lead bank or get an express consent from the lead bank for the transfer of their share of recovery, to ensure proper asset classification in their respective books.
+
+6. Appropriation of recoveries - What is the practice to be adopted by banks regarding appropriation of recoveries in NPA accounts?
+
+In the absence of a clear agreement between the bank and the borrower for the purpose, banks should adopt an accounting principle and exercise the right of appropriation of recoveries in a uniform and consistent manner.
+
+7. Activities allied to agriculture - Our existing guidelines stipulate that advances granted for agricultural purposes may be treated as NPA if interest and / or instalments towards repayment of principal remains unpaid for two harvest seasons but for a period not exceeding two half years. Whether the same norm can be extended to floriculture and allied agriculture activities like poultry, animal husbandry, etc.?
+
+As indicated in para 2.1.3, the norms for classifying direct agricultural advances (listed in Annex 1), as NPAs have since been revised w.e.f. September 30, 2004.
+
+8. Overdues in other credit facilities - There are instances where banks park the dues from a borrower in respect of devolved letters of credit and invoked guarantees in a separate account, irrespective of whether the borrower's creditfacilities are regular or not. How to determine when the account in which such dues are parked has become an NPA?
+
+A number of banks adopt the practice of parking the dues of the borrower in respect of devolved letters of credit and invoked guarantees in a separate account which is not a regular sanctioned facility. As a result these are not reflected in the principal operating account of the borrower. This renders application of the prudential norms for identification of NPAs difficult. It is, therefore, advised that if the debts arising out of devolvement of letters of credit or invoked guarantees are parked in a separate account, the balance outstanding in that account also should be treated as a part of the borrower's principal operating account for the purpose of application of prudential norms on income recognition, asset classification and provisioning.
+
+9. Treatment of loss assets - An NPA account will be classified as a loss asset only when there is no security in the account or where there is considerable erosion in the realisable value of the security in the account. What can be termed as a 'considerable' erosion for the account to be classified as a loss asset?
+
+If the realisable value of the security, as assessed by the bank / approved valuers / RBI is less than 10 per cent of the outstanding in the borrowal accounts, the existence of security should be ignored and the asset should be straightaway classified as loss asset. It may be either written off after obtaining necessary permission from the competent authority as per the Co-operative Societies Act / Rules, or fully provided for by the bank.
+
+10. Valuation of Security - A major source of divergence in provisioning requirement was the realisable value of the primary and collateral security. Can uniform guidelines be prescribed for adoption in this area, at least for large value accounts?
+
+With a view to bringing down divergence arising out of difference in assessment of the value of security it has been decided that in cases of NPAs with balance of Rs.10 lakh and above :
+
+a) The current assets and their valuation are looked into at the time of Statutory Audit / Concurrent audit. However, in order to enhance the reliability on stock valuations, stock audit at annual intervals by external agencies could be considered in case of larger advances. The cut off limit and the names of the external agencies may be finalised by the Board.
+
+b) Collaterals such as immovable properties charged in favour of the bank should be got valued once in three years by valuers appointed as per the guidelines approved by the Board of Directors.
