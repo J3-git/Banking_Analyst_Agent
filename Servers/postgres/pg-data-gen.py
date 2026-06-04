@@ -1438,7 +1438,6 @@ def generate_repayment_pattern_fifo(
         weights=[60, 25, 10, 5],
     )[0]
 
-    # Probability of MISSING a payment entirely, per cycle
     miss_probability = {
         "good": 0.02,
         "occasional_late": 0.10,
@@ -1473,7 +1472,6 @@ def generate_repayment_pattern_fifo(
             )
 
         # Step 2: mark overdue_since on past unpaid EMIs
-        # Only past dues (not the one just added for this cycle) are eligible
         for due in dues_queue:
             if (
                 due["kind"] == "emi"
@@ -1531,12 +1529,16 @@ def generate_repayment_pattern_fifo(
                     )
         dues_queue.extend(new_late_fees)
 
-        # Step 5: compute open fees for recovery phase reference
+        # Step 5: compute open fees
         open_fees = sum(
             d["remaining"]
             for d in dues_queue
             if d["kind"] in ("late_fee", "penal") and d["remaining"] > 0
         )
+
+        # Early exit: nothing left to recover
+        if is_recovery_phase and outstanding_balance == 0.0 and not dues_queue:
+            break
 
         # Step 6: determine payment amount
         roll = rng.random()
@@ -1549,17 +1551,28 @@ def generate_repayment_pattern_fifo(
             elif roll < miss_probability:
                 payment = 0.0
             else:
-                if profile == "good":
-                    payment = total_due * rng.uniform(0.6, 1.0)
-                elif profile == "occasional_late":
-                    payment = total_due * rng.uniform(0.3, 0.8)
-                elif profile == "struggling":
-                    payment = emi_amount * rng.uniform(0.2, 0.6)
+                # If the remaining balance is small (within ~1.5 EMIs or
+                # below 5000), any paying customer would simply clear it
+                # in full rather than making a partial payment that drags
+                # the loan on for extra cycles.
+                small_balance_threshold = max(emi_amount * 1.5, 5000.0)
+
+                if total_due <= small_balance_threshold:
+                    payment = total_due
                 else:
-                    payment = emi_amount * rng.uniform(0.05, 0.3)
+                    if profile == "good":
+                        payment = total_due * rng.uniform(0.6, 1.0)
+                    elif profile == "occasional_late":
+                        payment = total_due * rng.uniform(0.3, 0.8)
+                    elif profile == "struggling":
+                        payment = emi_amount * rng.uniform(0.2, 0.6)
+                    else:
+                        payment = emi_amount * rng.uniform(0.05, 0.3)
+
+            # Safety cap: never pay more than what is actually owed
+            payment = min(round(payment, 2), total_due)
 
         else:
-            # roll < miss_probability -> full miss for this cycle
             if roll < miss_probability:
                 payment = 0.0
             else:
@@ -1702,16 +1715,23 @@ def generate_repayment_pattern_fifo(
                 status = "MISSED"
 
         # Step 11: update outstanding balance
-        interest = outstanding_balance * monthly_rate
-
-        if payment > 0:
-            interest_paid = min(paid_emi, interest)
-            principal_paid = paid_emi - interest_paid
-            outstanding_balance -= principal_paid
+        if is_recovery_phase:
+            # Derive balance directly from what EMI principal remains in the
+            # queue. This is immune to incremental drift across cycles.
+            # Any surplus payment beyond all dues reduces the balance further.
+            emi_still_owed = sum(
+                d["remaining"] for d in dues_queue if d["kind"] == "emi"
+            )
+            outstanding_balance = round(max(0.0, emi_still_owed - available_payment), 2)
         else:
-            outstanding_balance += interest
-
-        outstanding_balance = round(max(0.0, outstanding_balance), 2)
+            interest = outstanding_balance * monthly_rate
+            if payment > 0:
+                interest_paid = min(paid_emi, interest)
+                principal_paid = paid_emi - interest_paid
+                outstanding_balance -= principal_paid
+            else:
+                outstanding_balance += interest
+            outstanding_balance = round(max(0.0, outstanding_balance), 2)
 
         # Step 12: cleanup fully settled dues
         dues_queue = [d for d in dues_queue if d["remaining"] > 0]
@@ -1742,8 +1762,8 @@ def generate_repayment_pattern_fifo(
             }
         )
 
-        # Exit recovery phase early if balance is negligible
-        if is_recovery_phase and outstanding_balance <= emi_amount * 0.1:
+        # Exit recovery phase early once balance is zero and queue is clear
+        if is_recovery_phase and outstanding_balance == 0.0 and not dues_queue:
             break
 
     return repayments
@@ -1872,15 +1892,17 @@ def generate_and_insert():
             tenure_months,
             principal=principal,
             annual_interest_rate=interest_rate,
-            seed=random.randint(1, 99999),  # unique seed per loan for variety
+            seed=random.randint(1, 99999),
         )
 
-        loan_status = derive_loan_status(repayments)
+        # Use the final repayment balance as the source of truth
+        outstanding = repayments[-1]["outstanding_balance"] if repayments else principal
 
-        total_paid = sum(r["amount_paid"] for r in repayments)
-        outstanding = round(max(0.0, float(principal) - total_paid * 0.6), 2)
-        if loan_status == "CLOSED":
+        if outstanding <= 0:
             outstanding = 0.0
+            loan_status = "CLOSED"
+        else:
+            loan_status = derive_loan_status(repayments)
 
         cur.execute(
             """

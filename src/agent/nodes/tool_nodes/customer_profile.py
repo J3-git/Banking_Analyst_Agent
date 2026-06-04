@@ -8,34 +8,6 @@ from langgraph.runtime import Runtime
 from agent.runtime_context import AppContext
 
 
-def _compute_risk_level(max_dpd: int, loan_status: str) -> str:
-    """
-    Classifies loan risk on the basis of DPD (Days Past Due Date).
-
-    DPD thresholds:
-        0  - 30  days  --> LOW
-        31 - 60  days  --> MEDIUM
-        61 - 90  days  --> HIGH
-        90+ days       --> CRITICAL
-
-    Loan status overrides DPD-based classification when already formally classified:
-        NPA / DEFAULTED -> always CRITICAL regardless of DPD
-        OVERDUE         -> at least MEDIUM regardless of DPD
-    """
-    if loan_status in ("NPA", "DEFAULTED"):
-        return "CRITICAL"
-    if max_dpd > 90:
-        return "CRITICAL"
-    elif max_dpd > 60:
-        return "HIGH"
-    elif max_dpd > 30:
-        return "MEDIUM"
-    elif loan_status == "OVERDUE":
-        return "MEDIUM"
-    else:
-        return "LOW"
-
-
 from agent.utils import _serialize_value
 from agent.agent_state import (
     AgentState,
@@ -223,6 +195,7 @@ def get_customer_profile_node(
         print("==========================================================")
         print("DEBUG: in get_customer_profile_node:")
         print(f"DEBUG: cache_key: {cache_key}")
+        print(f"DEBUG: retrieved_data: {retrieved_data}")
         print(f"DEBUG: customer: {customer.get('full_name')}")
         print(f"DEBUG: portfolio_risk_level: {final_risk}")
         print(f"DEBUG: loan_count: {len(loans)}")
