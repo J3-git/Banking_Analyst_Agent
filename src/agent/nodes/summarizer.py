@@ -347,6 +347,7 @@ def _build_execution_context(
     intent: str,
     tool_result: dict,
     response: str,
+    is_compare_turn: bool,
 ) -> ExecutionContext:
     """
     Builds a fresh ExecutionContext from the current turn.
@@ -473,6 +474,8 @@ def summarize_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
         and execution_context_prev.compare_slot_b
     )
 
+    chart_paths = list(state.get("chart_paths") or []) if is_compare else []
+
     if is_compare:
         slot_a = execution_context_prev.compare_slot_a
         slot_b = execution_context_prev.compare_slot_b
@@ -524,18 +527,19 @@ Generate a clear banking analyst summary.
             intent=intent,
             tool_result=tool_result,
             response=response,
+            is_compare_turn=is_compare,
         )
 
         print(f"DEBUG summarize_node: returned back from _build_execution_context")
 
         # accumulate export paths across turns
-        csv_paths = list(state.get("csv_paths") or [])
+        csv_paths = []
         tool_result_export = (
             tool_result.get("csv_path")
             if tool_result and isinstance(tool_result, dict)
             else None
         )
-        if tool_result_export and tool_result_export not in csv_paths:
+        if tool_result_export:
             csv_paths.append(tool_result_export)
             response += f"\n\nExport file available at: {tool_result_export}"
 
@@ -549,6 +553,7 @@ Generate a clear banking analyst summary.
             "final_response": response,
             "execution_context": execution_context,
             "csv_paths": csv_paths,
+            "chart_paths": chart_paths,
             "error": None,
         }
 
