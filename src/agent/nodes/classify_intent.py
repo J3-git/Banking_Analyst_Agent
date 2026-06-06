@@ -28,6 +28,7 @@ INTENT_PARAMS_MAP: dict[str, type[BaseModel] | None] = {
     Intent.GET_REPAYMENT_SUMMARY: RepaymentSummaryParams,
     Intent.GET_LOAN_PORTFOLIO_STATS: LoanPortfolioStatsParams,
     Intent.GET_COLLECTION_EFFICIENCY: CollectionEfficiencyParams,
+    Intent.GET_POLICY_INFO: None,
     Intent.GET_HELP: None,
     Intent.UNKNOWN: None,
 }
@@ -85,6 +86,7 @@ Intent definitions:
 - get_repayment_summary: user wants repayment history of a specific customer or loan
 - get_loan_portfolio_stats: user wants aggregate stats across all loans
 - get_collection_efficiency: user wants to see how well overdue loans are being recovered
+- get_policy_info: user is asking about banking policy, RBI rules, NPA definitions, SMA classification, provisioning norms, or any regulatory/policy concept
 - get_help: user is asking what the agent can do, asking for help, examples, or capabilities
 - unknown: query does not match any of the above
   

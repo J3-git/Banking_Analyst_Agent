@@ -146,7 +146,7 @@
 #         additional_inputs=[thread_state],
 #         examples=[
 #             ["Show me the loan portfolio stats"],
-#             ["Get customer profile for customer ID 1001"],
+#             ["Get customer profile for customer ID 2"],
 #             ["List all overdue loans"],
 #             ["What is the collection efficiency?"],
 #         ],
@@ -457,7 +457,7 @@ with gr.Blocks(
     gr.Examples(
         examples=[
             ["Show me the loan portfolio stats"],
-            ["Get customer profile for customer ID 1001"],
+            ["Get customer profile for customer ID 2"],
             ["List all overdue loans"],
             ["What is the collection efficiency?"],
             ["Compare portfolio stats for Mumbai vs Delhi"],

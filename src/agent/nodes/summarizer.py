@@ -205,6 +205,7 @@ Rules:
 - Highlight risks clearly
 - Do not hallucinate
 - If data is missing, explicitly say so
+- If providing details be specific. e.g. Clearly mention 'Load ID' / 'Customer ID' and not just 'ID'
 """
 
 INTENT_PROMPTS = {
@@ -365,6 +366,12 @@ def _build_execution_context(
 
     # carry forward persistent references from previous turn
     prev_context: ExecutionContext = state.get("execution_context")
+    follow_up_type = state.get("follow_up_type")
+
+    # only carry compare slots forward if this turn is itself a compare
+    is_compare_turn = (
+        hasattr(follow_up_type, "value") and follow_up_type.value == "compare"
+    ) or follow_up_type == "compare"
 
     # extract entity references from tool_result
     customer_id = None
@@ -417,8 +424,12 @@ def _build_execution_context(
         active_loan_type=str(active_loan_type) if active_loan_type else None,
         active_period=str(active_period) if active_period else None,
         # compare slots carried forward -- merge_node owns them
-        compare_slot_a=prev_context.compare_slot_a if prev_context else None,
-        compare_slot_b=prev_context.compare_slot_b if prev_context else None,
+        compare_slot_a=(
+            prev_context.compare_slot_a if (prev_context and is_compare_turn) else None
+        ),
+        compare_slot_b=(
+            prev_context.compare_slot_b if (prev_context and is_compare_turn) else None
+        ),
     )
 
     print(
@@ -453,8 +464,11 @@ def summarize_node(state: AgentState, runtime: Runtime[AppContext]) -> dict:
 
     # compare flow -- build prompt from compare slots
     execution_context_prev = state.get("execution_context")
+    follow_up_type = state.get("follow_up_type")
+
     is_compare = (
-        execution_context_prev
+        follow_up_type == "compare"  # or your enum check
+        and execution_context_prev
         and execution_context_prev.compare_slot_a
         and execution_context_prev.compare_slot_b
     )
