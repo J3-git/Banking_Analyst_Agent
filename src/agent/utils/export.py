@@ -108,7 +108,7 @@ from datetime import datetime
 
 EXPORT_DIR = os.getenv("EXPORT_DIR", "./exports")
 
-ROW_THRESHOLD = int(os.getenv("ROW_THRESHOLD", 10))
+ROW_THRESHOLD = int(os.getenv("ROW_THRESHOLD", 3))
 
 
 def _ensure_dir() -> None:
